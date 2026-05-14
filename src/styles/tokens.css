@@ -1,0 +1,85 @@
+:root {
+  /* ───── Color: Greens (4-tier) ───── */
+  --green-starbucks: #006241;
+  --green-accent: #00754a;
+  --green-house: #1e3932;
+  --green-uplift: #2b5148;
+  --green-light: #d4e9e2;
+
+  /* ───── Color: Surface ───── */
+  --canvas: #f2f0eb;         /* Neutral Warm — page canvas */
+  --canvas-2: #edebe9;       /* Ceramic — section separators */
+  --surface-card: #ffffff;
+  --surface-cool: #f9f9f9;
+
+  /* ───── Color: Text ───── */
+  --text-strong: rgba(0, 0, 0, 0.87);
+  --text-soft: rgba(0, 0, 0, 0.58);
+  --text-mute: rgba(0, 0, 0, 0.42);
+  --text-on-dark: #ffffff;
+  --text-on-dark-soft: rgba(255, 255, 255, 0.7);
+
+  /* ───── Color: Semantic ───── */
+  --danger: #c82014;
+  --danger-tint: hsl(4 82% 43% / 5%);
+  --warning: #fbbc05;
+  --success-tint: hsl(160 32% 87% / 33%);
+
+  /* ───── Border ───── */
+  --border-soft: #e7e7e7;
+  --border-input: #d6dbde;
+
+  /* ───── Typography ───── */
+  --font-sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --letter-tight: -0.01em;
+  --line-normal: 1.5;
+  --line-compact: 1.2;
+
+  /* ───── Spacing (1rem = 10px via 62.5% root) ───── */
+  --space-1: 0.4rem;
+  --space-2: 0.8rem;
+  --space-3: 1.6rem;
+  --space-4: 2.4rem;
+  --space-5: 3.2rem;
+  --space-6: 4rem;
+  --space-7: 4.8rem;
+  --space-8: 5.6rem;
+  --space-9: 6.4rem;
+
+  /* ───── Outer gutter (responsive) ───── */
+  --outer-gutter: 1.6rem;
+
+  /* ───── Radius ───── */
+  --radius-card: 12px;
+  --radius-pill: 50px;
+  --radius-input: 4px;
+
+  /* ───── Shadow ───── */
+  --shadow-card: 0 0 0.5px rgba(0, 0, 0, 0.14), 0 1px 1px rgba(0, 0, 0, 0.24);
+  --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.1), 0 2px 2px rgba(0, 0, 0, 0.06),
+    0 0 2px rgba(0, 0, 0, 0.07);
+  --shadow-float: 0 0 6px rgba(0, 0, 0, 0.24), 0 8px 12px rgba(0, 0, 0, 0.14);
+
+  /* ───── Motion ───── */
+  --duration: 0.2s;
+  --ease: ease;
+  --press-scale: 0.95;
+
+  /* ───── Layout caps ───── */
+  --column-sm: 343px;
+  --column-md: 500px;
+  --column-lg: 720px;
+  --column-xl: 1080px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --outer-gutter: 2.4rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --outer-gutter: 4rem;
+  }
+}
