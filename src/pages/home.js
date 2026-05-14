@@ -1,4 +1,4 @@
-import { loadRestaurants, loadPolls } from '../lib/sheets.js';
+import { loadRestaurants, loadPolls } from '../lib/supabase.js';
 import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
@@ -73,7 +73,7 @@ export async function renderHome(app) {
   }
 
   if (restaurants.length === 0) {
-    listEl.innerHTML = `<div class="state"><p>등록된 식당이 없습니다. 시트에 식당을 추가해주세요.</p></div>`;
+    listEl.innerHTML = `<div class="state"><p>등록된 식당이 없습니다.</p></div>`;
     return;
   }
 

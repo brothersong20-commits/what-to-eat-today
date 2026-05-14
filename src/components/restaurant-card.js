@@ -59,7 +59,17 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
         <div class="rc-meta-row">${meta}</div>
       </header>
 
-      ${r.address ? `<p class="rc-address">📍 ${escapeHtml(r.address)}</p>` : ''}
+      ${
+        r.address
+          ? `<p class="rc-address">📍 ${
+              r.naverUrl
+                ? `<a href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" class="rc-naver-link">${escapeHtml(r.address)} ↗</a>`
+                : escapeHtml(r.address)
+            }</p>`
+          : r.naverUrl
+            ? `<p class="rc-address"><a href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" class="rc-naver-link">📍 네이버 지도에서 보기 ↗</a></p>`
+            : ''
+      }
       ${noteRow}
 
       ${

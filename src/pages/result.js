@@ -1,4 +1,4 @@
-import { loadPoll, loadRestaurants, loadVotes } from '../lib/sheets.js';
+import { loadPoll, loadRestaurants, loadVotes } from '../lib/supabase.js';
 import { tally } from '../lib/tally.js';
 import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
@@ -85,7 +85,12 @@ export async function renderResult(app, { id: pollId }) {
     return;
   }
 
-  const result = tally(votes, restaurants);
+  // 폴이 후보 식당을 명시했으면 그 셋으로 좁힘. 취소된 식당은 일반 사용자 결과에서 제외.
+  const candidate = poll.restaurantIds && poll.restaurantIds.length > 0
+    ? restaurants.filter((r) => poll.restaurantIds.includes(r.id))
+    : restaurants;
+
+  const result = tally(votes, candidate);
 
   root.innerHTML = `
     <section class="vote-header">

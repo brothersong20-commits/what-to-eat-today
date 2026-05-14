@@ -1,5 +1,4 @@
-import { loadRestaurants, loadPoll } from '../lib/sheets.js';
-import { submitVote } from '../lib/webhook.js';
+import { loadRestaurants, loadPoll, submitVote } from '../lib/supabase.js';
 import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';

@@ -15,57 +15,69 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 ## Architecture — Big Picture
 
-세 레이어가 명확히 분리돼 있다.
+두 레이어로 분리돼 있다.
 
 1. **Static SPA (Vite + Vanilla JS, no framework)** — `src/main.js`가 해시 라우터(`src/lib/router.js`)에 네 라우트를 등록한다: `/`, `/vote/:id`, `/result/:id`, `/admin`. 각 페이지는 `src/pages/`의 `renderXxx(app, params)` 함수로 구현된다.
 
-2. **데이터 읽기 — Google Sheets CSV export** — `src/lib/sheets.js`가 `https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}` 를 `papaparse`로 파싱한다. 시트는 셋: `restaurants` / `polls` / `votes`. 헤더 정의의 단일 진실 원천은 `apps-script/Code.gs`의 `SHEETS` 상수다.
-
-3. **데이터 쓰기 — Apps Script Webhook** — `src/lib/webhook.js`가 POST. 응답이 `{ ok: false, error: <code> }`이면 `translateError`가 한국어로 변환한다.
+2. **Supabase (Postgres + RPC + Realtime)** — `src/lib/supabase.js`가 단일 진입점. 읽기는 `supabase.from(...)`, 쓰기는 RPC 호출(`submit_vote`, `create_poll`, `update_poll`, `create_restaurant`, `update_restaurant`, `delete_restaurant`, `set_restaurant_active`), 변경 구독은 `subscribeVotes`. 스키마와 함수 정의의 단일 진실 원천은 `supabase/schema.sql`이다.
 
 데이터 흐름:
 
 ```
-[홈]    home.js    → loadRestaurants()                    → restaurant-card
+[홈]    home.js    → loadRestaurants + loadPolls           → restaurant-card / poll-list
 [투표]  vote.js    → loadPoll + loadRestaurants
-                  → submitVote (webhook → Apps Script doPost → votes 시트 upsert)
+                  → submitVote (RPC: public.submit_vote)
 [결과]  result.js  → loadPoll + loadRestaurants + loadVotes
                   → tally() → 가중치 랭킹
-[관리자] admin.js  → createPoll (webhook → Apps Script doPost → polls 시트 append)
+[관리자] admin.js  → loadPolls + loadRestaurants + loadVotes
+                  → createPoll / updatePoll (RPC)
+                  → createRestaurant / updateRestaurant / deleteRestaurant / setRestaurantActive (RPC)
+                  → subscribeVotes (Realtime: postgres_changes on votes)
 ```
 
 ## 비명확한 핵심 규칙
 
 이 프로젝트에서 코드만 봐서는 즉시 보이지 않는 제약과 관습들. 변경 전 반드시 확인할 것.
 
-- **CORS preflight 회피**: webhook은 `Content-Type: text/plain;charset=utf-8`로 보낸다(`src/lib/webhook.js`의 `postWebhook`). 이는 Apps Script 표준 패턴이다. JSON으로 바꾸면 preflight `OPTIONS`가 발생하고 Apps Script는 처리할 수 없어 무성으로 실패한다.
+- **쓰기는 항상 RPC 경유**: 클라이언트는 `anon` (publishable) 키만 가지고, polls/votes/restaurants에 대한 RLS 정책은 SELECT만 허용한다. INSERT/UPDATE/DELETE는 `security definer`로 선언된 RPC(`submit_vote`, `create_poll`, `update_poll`)를 통해서만 가능하다. 새 쓰기 작업이 필요하면 `supabase/schema.sql`에 RPC를 먼저 정의하고 클라이언트에서 호출한다.
 
-- **webhook `action` 디스패치**: `Code.gs`의 `doPost`는 `body.action`으로 분기하며 누락 시 `'vote'`로 fallback. `'vote'` → `handleVote_`, `'create_poll'` → `handleCreatePoll_`. 디스패처 fallback은 구버전 클라이언트 호환을 위해 절대 제거하지 말 것. 새 액션 추가 시 분기만 늘리고 vote/createPoll 로직은 건드리지 않는다.
+- **관리자 인증 (이중 검증)**: `/#/admin` 진입 시 클라이언트의 `VITE_ADMIN_KEY`와 비교 후 `localStorage.wte_admin_key`에 저장한다. `create_poll`·`update_poll` RPC는 `p_admin_key` 인자를 받아 `private.app_config` 테이블의 `admin_key` 값과 비교한다. private 스키마는 anon/authenticated에 GRANT가 없어 클라이언트가 직접 SELECT 불가하고, 함수는 `security definer`로 우회해서 읽는다. **두 키는 동일 값으로 맞춰야 한다.** 변경 시 SQL Editor에서 `update private.app_config set value = '새 값' where key = 'admin_key';` 실행 + `.env.local`의 `VITE_ADMIN_KEY` 갱신.
 
-- **관리자 인증**: `/#/admin` 진입 시 `VITE_ADMIN_KEY`와 비교하고 통과하면 `localStorage.wte_admin_key`에 저장. `createPoll` 요청에 `adminKey`를 실어 보내면 Apps Script가 Script Property `ADMIN_KEY`로 재검증해 `unauthorized`를 반환할 수 있음. 두 키는 **동일 값**으로 맞춰야 한다.
+- **투표는 (poll_id, voter_name) 기준 upsert**: `submit_vote` RPC가 `on conflict ... do update`로 같은 이름의 기존 행을 덮어쓴다. 응답 boolean으로 신규(`false`)/수정(`true`)을 구분한다.
 
-- **투표는 (poll_id, voter_name) 기준 upsert**: 같은 이름으로 다시 제출하면 Apps Script `doPost`가 기존 행을 덮어쓴다(`apps-script/Code.gs` `doPost`의 마지막 블록). 응답의 `updated` 플래그로 신규/수정을 구분한다.
+- **마감 검증은 서버에서도 한다**: 클라이언트가 `isPastDeadline()`로 한 번 가드하지만, `submit_vote` RPC가 `polls.deadline`과 `polls.status`를 다시 검증해 `poll_closed`/`deadline_passed` 예외를 raise. 클라이언트 시계를 신뢰하지 말 것.
 
-- **마감 검증은 서버에서도 한다**: 클라이언트가 `isPastDeadline()`로 한 번 가드하지만, Apps Script가 `polls.deadline`과 `polls.status`를 다시 검증해 `poll_closed`/`deadline_passed`를 반환한다. 클라이언트 시계를 신뢰하지 말 것.
+- **부분 업데이트 컨벤션**: `update_poll`은 null인 필드를 "변경 안 함"으로 해석한다. `description`을 빈 값으로 명시 클리어하려면 별도 boolean `p_clear_description=true`로 보낸다. 클라이언트 `updatePoll({patch})`이 이 변환을 담당.
+
+- **취소된 식당 보존**: 관리자가 후보에서 식당을 제거하면 `polls.removed_restaurant_ids` 배열로 옮겨진다. 다시 추가하면 거기서 빠진다. tally 자체는 변경 없이, admin 상세 패널에서 활성/취소 두 셋을 각각 tally해 별도 섹션으로 표시한다. `result.js`(일반 사용자)는 활성 식당만 tally한다.
 
 - **가중치 집계**: 1순위 = 2점, 2순위 = 1점. 동점이면 1순위 카운트 → 2순위 카운트 순으로 타이브레이크(`src/lib/tally.js`). 점수 0인 식당은 랭킹에서 제외된다.
 
-- **한국어 enum 값이 wire 를 가로지른다**: `ATTENDANCE = { YES: '참석', NO: '불참석', HOLD: '보류' }`(`src/lib/config.js`). 같은 한국어 문자열이 시트 셀, Apps Script `doPost` 검증, 클라이언트 비교 로직에서 동일하게 사용된다. 한 곳만 영문으로 바꾸면 다른 곳에서 조용히 깨진다.
+- **한국어 enum 값이 wire 를 가로지른다**: `ATTENDANCE = { YES: '참석', NO: '불참석', HOLD: '보류' }`(`src/lib/config.js`). 같은 한국어 문자열이 Postgres `check` 제약, RPC 검증, 클라이언트 비교 로직에서 동일하게 사용된다. 한 곳만 영문으로 바꾸면 다른 곳에서 조용히 깨진다.
 
 - **메뉴 텍스트 포맷**: `restaurants.menus_text`는 `"이름(가격)/이름(가격)"` 슬래시 구분 문자열이다. `src/lib/menus.js`의 `parseMenusText`가 파싱하며 가격 없는 항목(`price = null`)도 허용한다.
 
-- **`VITE_` 환경변수는 클라이언트 번들에 노출된다**: `SHEET_ID`, GID들, Apps Script URL 모두 공개된다. 민감 정보는 절대 저장 금지. 시트 공유 설정도 "링크가 있는 모든 사용자"를 전제로 한다.
+- **Realtime 구독은 cleanup 필수**: `subscribeVotes`가 반환한 채널을 페이지 떠날 때 `unsubscribe(channel)`로 정리해야 한다. admin.js는 모듈 스코프 cleanup 레지스트리(`registerCleanup`)로 통일 처리.
+
+- **`VITE_` 환경변수는 클라이언트 번들에 노출된다**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`(=publishable/anon key), `VITE_ADMIN_KEY` 모두 공개된다. **`service_role` 키는 절대 클라이언트에 두지 말 것** — RLS 우회 가능하다. 관리자 키는 publishable이 아니라 별도 GUC 검증이라 안전성 확보.
 
 - **디자인 토큰 파이프라인**: `DESIGN.md`(Starbucks 영감 명세) → `src/styles/tokens.css`(CSS 변수) → `src/styles/global.css`(토큰만 참조). 새 색/간격이 필요하면 먼저 `tokens.css`에 토큰을 추가하고 그 변수를 사용해야 한다. 루트가 `62.5%`라는 전제 위에서 `1rem = 10px`로 스페이싱 스케일이 설계돼 있다.
 
-- **`CATEGORIES`는 안내용 하드코딩**: `src/lib/config.js`의 배열은 참고용이고, 실제 필터 칩은 시트의 카테고리 값에서 동적으로 추출된다(`home.js`, `vote.js`). 카테고리 추가 시 시트만 고쳐도 동작하지만 둘 다 맞춰두는 게 권장된다.
+- **`CATEGORIES`는 안내용 하드코딩**: `src/lib/config.js`의 배열은 참고용이고, 실제 필터 칩은 DB의 카테고리 값에서 동적으로 추출된다(`home.js`, `vote.js`). 카테고리 추가 시 DB만 고쳐도 동작하지만 둘 다 맞춰두는 게 권장된다.
 
 - **라우터는 해시 기반(`/#/vote/:id`)**: 정적 호스팅(Vercel)에서 SPA fallback 설정이 불필요하다. 새 라우트는 `src/main.js`에서 `defineRoute(...)` 한 줄을 추가한다.
 
-## 시트 컬럼을 추가/변경할 때 동기화할 지점
+## 스키마를 추가/변경할 때 동기화할 지점
 
 세 곳을 함께 갱신해야 한다.
 
-1. `apps-script/Code.gs`의 `SHEETS` 상수 (헤더 정의)
-2. `src/lib/sheets.js`의 `loadRestaurants` / `loadPolls` / `loadVotes` 매핑
-3. 사용 측 페이지/컴포넌트
+1. `supabase/schema.sql` — 테이블·RPC·RLS·publication 정의의 단일 진실 원천. Supabase SQL Editor에서 실행해야 DB에 반영된다.
+2. `src/lib/supabase.js`의 `loadRestaurants` / `loadPolls` / `loadVotes` / `mapPoll` 등 매핑 함수, 그리고 `createPoll` / `updatePoll` / `submitVote`의 인자 변환.
+3. 사용 측 페이지/컴포넌트.
+
+## Supabase 운영
+
+- **스키마 초기 설정**: `supabase/schema.sql` 전체를 Supabase 대시보드 SQL Editor에 붙여넣고 실행. 멱등하게 작성돼 있어 반복 실행 가능.
+- **시드 데이터**: 빈 시작용 더미가 필요하면 `supabase/seed.sql` 실행.
+- **ADMIN_KEY 변경**: `update private.app_config set value = '...' where key = 'admin_key';` 실행 + `.env.local`의 `VITE_ADMIN_KEY` 동기화.
+- **Realtime 동작 확인**: `supabase_realtime` publication에 `public.votes`가 포함돼 있어야 한다. `schema.sql`이 자동 추가하지만, 새 테이블의 변경도 구독하려면 publication에 add 필요.
