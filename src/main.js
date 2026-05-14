@@ -3,15 +3,14 @@ import { defineRoute, start } from './lib/router.js';
 import { renderHome } from './pages/home.js';
 import { renderVote } from './pages/vote.js';
 import { renderResult } from './pages/result.js';
+import { renderAdmin } from './pages/admin.js';
 
 const app = document.getElementById('app');
-
-const versionEl = document.getElementById('version-badge');
-if (versionEl) versionEl.textContent = `v${__APP_VERSION__}`;
 
 defineRoute('/', () => renderHome(app));
 defineRoute('/vote/:id', (params) => renderVote(app, params));
 defineRoute('/result/:id', (params) => renderResult(app, params));
+defineRoute('/admin', () => renderAdmin(app));
 
 start(() => {
   app.innerHTML = `

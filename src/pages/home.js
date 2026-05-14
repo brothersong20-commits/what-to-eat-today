@@ -1,15 +1,32 @@
-import { loadRestaurants } from '../lib/sheets.js';
+import { loadRestaurants, loadPolls } from '../lib/sheets.js';
+import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 export async function renderHome(app) {
   app.innerHTML = `
-    <header class="site-header">
-      <div>
+    <header class="site-header site-header--home">
+      <a href="#/admin" class="site-admin-link">관리자</a>
+      <div class="site-header-center">
         <h1 class="site-title">오늘뭐먹지?</h1>
         <p class="site-subtitle">회식 메뉴, 함께 정해요</p>
+        <span class="site-version">v${__APP_VERSION__}</span>
       </div>
     </header>
+
+    <section class="card stack-3" id="active-polls-section" hidden style="margin-bottom: var(--space-3);">
+      <div>
+        <h2>투표 중인 회식</h2>
+        <p class="text-soft fs-small">진행 중인 회식 투표에 참여해보세요.</p>
+      </div>
+      <div id="active-polls-list" class="poll-list"></div>
+    </section>
 
     <section class="card stack-4">
       <div>
@@ -31,6 +48,21 @@ export async function renderHome(app) {
   const filterMount = app.querySelector('#filter-bar-mount');
   const listEl = app.querySelector('#restaurant-list');
   const summaryEl = app.querySelector('#restaurant-summary');
+  const pollsSection = app.querySelector('#active-polls-section');
+  const pollsListEl = app.querySelector('#active-polls-list');
+
+  loadPolls()
+    .then((polls) => {
+      const active = polls
+        .filter((p) => p.status === 'active' && !isPastDeadline(p.deadline))
+        .sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
+      if (active.length === 0) return;
+      pollsSection.hidden = false;
+      pollsListEl.innerHTML = active.map(renderPollItem).join('');
+    })
+    .catch(() => {
+      /* 활성 폴 로드 실패는 silent. 식당 목록은 별도로 진행. */
+    });
 
   let restaurants = [];
   try {
@@ -64,4 +96,19 @@ export async function renderHome(app) {
 
   bindFilterBar(filterMount, filterState, render);
   render();
+}
+
+function renderPollItem(p) {
+  const eventStr = formatEventDateTime(p.eventDate, p.eventTime);
+  const remaining = formatRemaining(p.deadline);
+  return `
+    <a class="poll-item" href="#/vote/${encodeURIComponent(p.id)}">
+      <div class="poll-item-title">${escapeHtml(p.title)}</div>
+      <div class="poll-item-meta">
+        ${p.mealType ? `<span>🍽 ${escapeHtml(p.mealType)}</span>` : ''}
+        ${eventStr ? `<span>📅 ${escapeHtml(eventStr)}</span>` : ''}
+      </div>
+      <div class="poll-item-deadline">⏰ 마감까지 ${escapeHtml(remaining)}</div>
+    </a>
+  `;
 }

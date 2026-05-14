@@ -17,7 +17,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 세 레이어가 명확히 분리돼 있다.
 
-1. **Static SPA (Vite + Vanilla JS, no framework)** — `src/main.js`가 해시 라우터(`src/lib/router.js`)에 세 라우트를 등록한다: `/`, `/vote/:id`, `/result/:id`. 각 페이지는 `src/pages/`의 `renderXxx(app, params)` 비동기 함수로 구현된다.
+1. **Static SPA (Vite + Vanilla JS, no framework)** — `src/main.js`가 해시 라우터(`src/lib/router.js`)에 네 라우트를 등록한다: `/`, `/vote/:id`, `/result/:id`, `/admin`. 각 페이지는 `src/pages/`의 `renderXxx(app, params)` 함수로 구현된다.
 
 2. **데이터 읽기 — Google Sheets CSV export** — `src/lib/sheets.js`가 `https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}` 를 `papaparse`로 파싱한다. 시트는 셋: `restaurants` / `polls` / `votes`. 헤더 정의의 단일 진실 원천은 `apps-script/Code.gs`의 `SHEETS` 상수다.
 
@@ -26,18 +26,23 @@ npm run preview  # 빌드 결과 로컬 미리보기
 데이터 흐름:
 
 ```
-[홈]   home.js   → loadRestaurants()                    → restaurant-card
-[투표] vote.js   → loadPoll + loadRestaurants
-                 → submitVote (webhook → Apps Script doPost → votes 시트 upsert)
-[결과] result.js → loadPoll + loadRestaurants + loadVotes
-                 → tally() → 가중치 랭킹
+[홈]    home.js    → loadRestaurants()                    → restaurant-card
+[투표]  vote.js    → loadPoll + loadRestaurants
+                  → submitVote (webhook → Apps Script doPost → votes 시트 upsert)
+[결과]  result.js  → loadPoll + loadRestaurants + loadVotes
+                  → tally() → 가중치 랭킹
+[관리자] admin.js  → createPoll (webhook → Apps Script doPost → polls 시트 append)
 ```
 
 ## 비명확한 핵심 규칙
 
 이 프로젝트에서 코드만 봐서는 즉시 보이지 않는 제약과 관습들. 변경 전 반드시 확인할 것.
 
-- **CORS preflight 회피**: webhook은 `Content-Type: text/plain;charset=utf-8`로 보낸다(`src/lib/webhook.js:9-14`). 이는 Apps Script 표준 패턴이다. JSON으로 바꾸면 preflight `OPTIONS`가 발생하고 Apps Script는 처리할 수 없어 무성으로 실패한다.
+- **CORS preflight 회피**: webhook은 `Content-Type: text/plain;charset=utf-8`로 보낸다(`src/lib/webhook.js`의 `postWebhook`). 이는 Apps Script 표준 패턴이다. JSON으로 바꾸면 preflight `OPTIONS`가 발생하고 Apps Script는 처리할 수 없어 무성으로 실패한다.
+
+- **webhook `action` 디스패치**: `Code.gs`의 `doPost`는 `body.action`으로 분기하며 누락 시 `'vote'`로 fallback. `'vote'` → `handleVote_`, `'create_poll'` → `handleCreatePoll_`. 디스패처 fallback은 구버전 클라이언트 호환을 위해 절대 제거하지 말 것. 새 액션 추가 시 분기만 늘리고 vote/createPoll 로직은 건드리지 않는다.
+
+- **관리자 인증**: `/#/admin` 진입 시 `VITE_ADMIN_KEY`와 비교하고 통과하면 `localStorage.wte_admin_key`에 저장. `createPoll` 요청에 `adminKey`를 실어 보내면 Apps Script가 Script Property `ADMIN_KEY`로 재검증해 `unauthorized`를 반환할 수 있음. 두 키는 **동일 값**으로 맞춰야 한다.
 
 - **투표는 (poll_id, voter_name) 기준 upsert**: 같은 이름으로 다시 제출하면 Apps Script `doPost`가 기존 행을 덮어쓴다(`apps-script/Code.gs` `doPost`의 마지막 블록). 응답의 `updated` 플래그로 신규/수정을 구분한다.
 

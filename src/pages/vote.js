@@ -32,7 +32,12 @@ export async function renderVote(app, { id: pollId }) {
 
   let poll, restaurants;
   try {
-    [poll, restaurants] = await Promise.all([loadPoll(pollId), loadRestaurants()]);
+    const [loadedPoll, allRestaurants] = await Promise.all([loadPoll(pollId), loadRestaurants()]);
+    poll = loadedPoll;
+    // poll.restaurantIds 가 비어 있으면 (구버전 폴) 전체 활성 식당을 후보로 사용
+    restaurants = poll && poll.restaurantIds && poll.restaurantIds.length > 0
+      ? allRestaurants.filter((r) => poll.restaurantIds.includes(r.id))
+      : allRestaurants;
   } catch (err) {
     root.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
     return;

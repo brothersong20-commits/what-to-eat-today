@@ -60,7 +60,12 @@ export async function loadPolls() {
       deadline: String(r.deadline || '').trim(),
       status: String(r.status || '').trim() || 'active',
       description: String(r.description || '').trim(),
-      createdAt: String(r.created_at || '').trim()
+      createdAt: String(r.created_at || '').trim(),
+      // 빈 배열 = 후보 미지정. 구버전 폴 호환을 위해 클라이언트가 "전체 활성 식당"으로 폴백.
+      restaurantIds: String(r.restaurant_ids || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     }))
     .filter((p) => p.id && p.title);
 }

@@ -15,7 +15,7 @@ const SHEETS = {
   ],
   polls: [
     'id', 'title', 'meal_type', 'event_date', 'event_time',
-    'deadline', 'status', 'description', 'created_at'
+    'deadline', 'status', 'description', 'created_at', 'restaurant_ids'
   ],
   votes: [
     'poll_id', 'voter_name', 'attendance',
@@ -93,82 +93,157 @@ function seedDummyData() {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
-    const pollId     = (body.pollId     || '').toString().trim();
-    const voterName  = (body.voterName  || '').toString().trim();
-    const attendance = (body.attendance || '').toString().trim();
-    const choice1Id  = (body.choice1Id  || '').toString().trim();
-    const choice2Id  = (body.choice2Id  || '').toString().trim();
-
-    if (!pollId || !voterName || !attendance) {
-      return jsonResponse({ ok: false, error: 'missing_required_fields' });
-    }
-    if (['참석', '불참석', '보류'].indexOf(attendance) === -1) {
-      return jsonResponse({ ok: false, error: 'invalid_attendance' });
-    }
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    const polls = ss.getSheetByName('polls');
-    const pollsData = polls.getDataRange().getValues();
-    const pollsHeaders = pollsData[0];
-    const pIdCol     = pollsHeaders.indexOf('id');
-    const pDeadCol   = pollsHeaders.indexOf('deadline');
-    const pStatusCol = pollsHeaders.indexOf('status');
-
-    let pollDeadline = null;
-    let pollStatus = null;
-    for (let i = 1; i < pollsData.length; i++) {
-      if (pollsData[i][pIdCol] === pollId) {
-        pollDeadline = pollsData[i][pDeadCol];
-        pollStatus   = pollsData[i][pStatusCol];
-        break;
-      }
-    }
-    if (pollDeadline === null) {
-      return jsonResponse({ ok: false, error: 'poll_not_found' });
-    }
-    if (pollStatus === 'closed') {
-      return jsonResponse({ ok: false, error: 'poll_closed' });
-    }
-    const now = new Date();
-    const deadlineDate = (pollDeadline instanceof Date) ? pollDeadline : new Date(pollDeadline);
-    if (now > deadlineDate) {
-      return jsonResponse({ ok: false, error: 'deadline_passed' });
-    }
-
-    const votes = ss.getSheetByName('votes');
-    const data = votes.getDataRange().getValues();
-    const headers = data[0];
-    const pollIdCol    = headers.indexOf('poll_id');
-    const voterNameCol = headers.indexOf('voter_name');
-
-    let targetRow = -1;
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][pollIdCol] === pollId && data[i][voterNameCol] === voterName) {
-        targetRow = i + 1;
-        break;
-      }
-    }
-
-    const row = [
-      pollId,
-      voterName,
-      attendance,
-      attendance === '참석' ? choice1Id : '',
-      attendance === '참석' ? choice2Id : '',
-      now
-    ];
-
-    if (targetRow > 0) {
-      votes.getRange(targetRow, 1, 1, row.length).setValues([row]);
-    } else {
-      votes.appendRow(row);
-    }
-
-    return jsonResponse({ ok: true, updated: targetRow > 0 });
+    const action = (body.action || 'vote').toString();
+    if (action === 'create_poll') return handleCreatePoll_(body);
+    return handleVote_(body);
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });
   }
+}
+
+function handleVote_(body) {
+  const pollId     = (body.pollId     || '').toString().trim();
+  const voterName  = (body.voterName  || '').toString().trim();
+  const attendance = (body.attendance || '').toString().trim();
+  const choice1Id  = (body.choice1Id  || '').toString().trim();
+  const choice2Id  = (body.choice2Id  || '').toString().trim();
+
+  if (!pollId || !voterName || !attendance) {
+    return jsonResponse({ ok: false, error: 'missing_required_fields' });
+  }
+  if (['참석', '불참석', '보류'].indexOf(attendance) === -1) {
+    return jsonResponse({ ok: false, error: 'invalid_attendance' });
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const polls = ss.getSheetByName('polls');
+  const pollsData = polls.getDataRange().getValues();
+  const pollsHeaders = pollsData[0];
+  const pIdCol     = pollsHeaders.indexOf('id');
+  const pDeadCol   = pollsHeaders.indexOf('deadline');
+  const pStatusCol = pollsHeaders.indexOf('status');
+
+  let pollDeadline = null;
+  let pollStatus = null;
+  for (let i = 1; i < pollsData.length; i++) {
+    if (pollsData[i][pIdCol] === pollId) {
+      pollDeadline = pollsData[i][pDeadCol];
+      pollStatus   = pollsData[i][pStatusCol];
+      break;
+    }
+  }
+  if (pollDeadline === null) {
+    return jsonResponse({ ok: false, error: 'poll_not_found' });
+  }
+  if (pollStatus === 'closed') {
+    return jsonResponse({ ok: false, error: 'poll_closed' });
+  }
+  const now = new Date();
+  const deadlineDate = (pollDeadline instanceof Date) ? pollDeadline : new Date(pollDeadline);
+  if (now > deadlineDate) {
+    return jsonResponse({ ok: false, error: 'deadline_passed' });
+  }
+
+  const votes = ss.getSheetByName('votes');
+  const data = votes.getDataRange().getValues();
+  const headers = data[0];
+  const pollIdCol    = headers.indexOf('poll_id');
+  const voterNameCol = headers.indexOf('voter_name');
+
+  let targetRow = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][pollIdCol] === pollId && data[i][voterNameCol] === voterName) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  const row = [
+    pollId,
+    voterName,
+    attendance,
+    attendance === '참석' ? choice1Id : '',
+    attendance === '참석' ? choice2Id : '',
+    now
+  ];
+
+  if (targetRow > 0) {
+    votes.getRange(targetRow, 1, 1, row.length).setValues([row]);
+  } else {
+    votes.appendRow(row);
+  }
+
+  return jsonResponse({ ok: true, updated: targetRow > 0 });
+}
+
+function handleCreatePoll_(body) {
+  const expected = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+  const adminKey = (body.adminKey || '').toString();
+  if (!expected || expected !== adminKey) {
+    return jsonResponse({ ok: false, error: 'unauthorized' });
+  }
+
+  const title         = (body.title         || '').toString().trim();
+  const mealType      = (body.mealType      || '').toString().trim();
+  const eventDate     = (body.eventDate     || '').toString().trim();
+  const eventTime     = (body.eventTime     || '').toString().trim();
+  const deadline      = (body.deadline      || '').toString().trim();
+  const description   = (body.description   || '').toString().trim();
+  const restaurantIds = (body.restaurantIds || '').toString().trim();
+
+  if (!title || !mealType || !eventDate || !eventTime || !deadline || !restaurantIds) {
+    return jsonResponse({ ok: false, error: 'missing_required_fields' });
+  }
+
+  const parsedDeadline = new Date(deadline.replace(' ', 'T'));
+  if (isNaN(parsedDeadline.getTime())) {
+    return jsonResponse({ ok: false, error: 'invalid_deadline' });
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const polls = ss.getSheetByName('polls');
+  const pollsData = polls.getDataRange().getValues();
+  const idCol = pollsData[0].indexOf('id');
+  const existing = new Set();
+  for (let i = 1; i < pollsData.length; i++) {
+    const v = pollsData[i][idCol];
+    if (v) existing.add(String(v).trim());
+  }
+
+  const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd');
+  const base = 'P' + today;
+  let pollId = null;
+  if (!existing.has(base)) {
+    pollId = base;
+  } else {
+    for (let n = 2; n <= 99; n++) {
+      const candidate = base + '-' + n;
+      if (!existing.has(candidate)) {
+        pollId = candidate;
+        break;
+      }
+    }
+  }
+  if (!pollId) {
+    return jsonResponse({ ok: false, error: 'id_collision_exhausted' });
+  }
+
+  const createdAt = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+  polls.appendRow([
+    pollId,
+    title,
+    mealType,
+    eventDate,
+    eventTime,
+    deadline,
+    'active',
+    description,
+    createdAt,
+    restaurantIds
+  ]);
+
+  return jsonResponse({ ok: true, pollId: pollId });
 }
 
 function doGet() {

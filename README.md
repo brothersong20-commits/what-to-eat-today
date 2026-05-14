@@ -22,12 +22,13 @@ npm run build
 ## URL
 
 - `/` — 식당 둘러보기
+- `/#/admin` — 관리자 폴 생성 (키 입력 후 진입)
 - `/#/vote/:pollId` — 투표 페이지 (카톡 공유용)
 - `/#/result/:pollId` — 결과 페이지 (마감 후 공개)
 
 ## 환경 변수
 
-`.env.local` 에 5개 값 필요:
+`.env.local` 에 6개 값 필요:
 
 ```
 VITE_SHEET_ID=
@@ -35,9 +36,20 @@ VITE_RESTAURANTS_GID=
 VITE_POLLS_GID=
 VITE_VOTES_GID=
 VITE_APPS_SCRIPT_URL=
+VITE_ADMIN_KEY=
 ```
 
 값을 구하는 방법과 Apps Script 배포 절차는 [APPS_SCRIPT_SETUP.md](./APPS_SCRIPT_SETUP.md) 참조.
+
+## 관리자 페이지 (`/#/admin`)
+
+폴 생성은 `/#/admin` 라우트에서 한다. 동일한 키를 두 곳에 설정해야 한다.
+
+1. `.env.local`에 `VITE_ADMIN_KEY=<공통키>` 등록 (클라가 입력 검증에 사용).
+2. Apps Script 편집기 → ⚙ 프로젝트 설정 → 스크립트 속성에 `ADMIN_KEY=<같은 공통키>` 추가 (서버가 webhook 요청에서 재검증).
+3. `Code.gs` 변경 후엔 반드시 **배포 → 배포 관리 → 편집 → 새 버전 → 배포**로 새 버전을 찍어야 적용된다.
+
+키는 클라 번들에 노출되므로 강한 인증이 아니다. "URL이 새도 폴은 못 만들게" 정도의 가벼운 차단으로 보면 된다.
 
 ## 폴더 구조
 
