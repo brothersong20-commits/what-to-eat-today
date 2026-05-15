@@ -43,6 +43,35 @@ export function formatRemaining(deadlineText, now = new Date()) {
   return `${sec % 60}초 남음`;
 }
 
+/**
+ * 디지털 시계 스타일: "4일 22:35:12" 또는 "05:30:12". 음수면 "마감됨".
+ */
+export function formatClock(deadlineText, now = new Date()) {
+  const d = parseDeadline(deadlineText);
+  if (!d) return '';
+  const diff = d.getTime() - now.getTime();
+  if (diff <= 0) return '마감됨';
+
+  const sec = Math.floor(diff / 1000);
+  const days = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  const clock = `${pad(h)}:${pad(m)}:${pad(s)}`;
+  return days > 0 ? `${days}일 ${clock}` : clock;
+}
+
+/**
+ * 마감 후 graceDays 일 이내인지. graceDays=3 이면 마감 후 72시간 동안 true.
+ */
+export function withinGracePeriod(deadlineText, graceDays = 3, now = new Date()) {
+  const d = parseDeadline(deadlineText);
+  if (!d) return false;
+  const diffMs = now.getTime() - d.getTime();
+  return diffMs >= 0 && diffMs <= graceDays * 86400 * 1000;
+}
+
 export function formatEventDateTime(dateText, timeText) {
   const datePart = (dateText || '').trim();
   const timePart = (timeText || '').trim();

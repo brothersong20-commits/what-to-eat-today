@@ -1,4 +1,5 @@
 import { formatPrice } from '../lib/menus.js';
+import { categorySlug } from '../lib/config.js';
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -27,7 +28,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
     .join('');
 
   const meta = [
-    r.category && `<span class="rc-badge">${escapeHtml(r.category)}</span>`,
+    r.category && `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>`,
     r.walkingMinutes != null && `<span class="rc-meta">🚶 도보 ${r.walkingMinutes}분</span>`,
     r.capacity && `<span class="rc-meta">🪑 ${escapeHtml(r.capacity)}</span>`
   ]
@@ -37,6 +38,15 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
   const noteRow = r.note
     ? `<p class="rc-note">📝 ${escapeHtml(r.note)}</p>`
     : '';
+
+  const mapLink = r.naverUrl
+    ? `<a href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" class="rc-map-link" aria-label="네이버 지도에서 보기">↗</a>`
+    : '';
+
+  const addressRow =
+    r.address || r.naverUrl
+      ? `<p class="rc-address">📍 ${escapeHtml(r.address)}${mapLink}</p>`
+      : '';
 
   const choiceRow =
     mode === 'choice'
@@ -59,17 +69,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
         <div class="rc-meta-row">${meta}</div>
       </header>
 
-      ${
-        r.address
-          ? `<p class="rc-address">📍 ${
-              r.naverUrl
-                ? `<a href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" class="rc-naver-link">${escapeHtml(r.address)} ↗</a>`
-                : escapeHtml(r.address)
-            }</p>`
-          : r.naverUrl
-            ? `<p class="rc-address"><a href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" class="rc-naver-link">📍 네이버 지도에서 보기 ↗</a></p>`
-            : ''
-      }
+      ${addressRow}
       ${noteRow}
 
       ${

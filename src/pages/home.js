@@ -1,5 +1,5 @@
 import { loadRestaurants, loadPolls } from '../lib/supabase.js';
-import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
+import { isPastDeadline, formatClock, withinGracePeriod, formatEventDateTime } from '../lib/time.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 
@@ -54,11 +54,25 @@ export async function renderHome(app) {
   loadPolls()
     .then((polls) => {
       const active = polls
-        .filter((p) => p.status === 'active' && !isPastDeadline(p.deadline))
+        .filter((p) => p.status === 'active'
+          && (!isPastDeadline(p.deadline) || withinGracePeriod(p.deadline, 3)))
         .sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
       if (active.length === 0) return;
       pollsSection.hidden = false;
       pollsListEl.innerHTML = active.map(renderPollItem).join('');
+
+      function tickPollCountdowns() {
+        pollsListEl.querySelectorAll('.poll-item').forEach((card) => {
+          const deadline = card.dataset.deadline;
+          const clockEl = card.querySelector('.poll-item-deadline-clock');
+          if (!clockEl) return;
+          clockEl.textContent = formatClock(deadline);
+          card.classList.toggle('is-expired', isPastDeadline(deadline));
+        });
+      }
+      tickPollCountdowns();
+      const handle = setInterval(tickPollCountdowns, 1000);
+      window.addEventListener('hashchange', () => clearInterval(handle), { once: true });
     })
     .catch(() => {
       /* 활성 폴 로드 실패는 silent. 식당 목록은 별도로 진행. */
@@ -100,15 +114,20 @@ export async function renderHome(app) {
 
 function renderPollItem(p) {
   const eventStr = formatEventDateTime(p.eventDate, p.eventTime);
-  const remaining = formatRemaining(p.deadline);
+  const expired = isPastDeadline(p.deadline);
   return `
-    <a class="poll-item" href="#/vote/${encodeURIComponent(p.id)}">
+    <a class="poll-item ${expired ? 'is-expired' : ''}"
+       href="#/vote/${encodeURIComponent(p.id)}"
+       data-deadline="${escapeHtml(p.deadline || '')}">
       <div class="poll-item-title">${escapeHtml(p.title)}</div>
       <div class="poll-item-meta">
         ${p.mealType ? `<span>🍽 ${escapeHtml(p.mealType)}</span>` : ''}
         ${eventStr ? `<span>📅 ${escapeHtml(eventStr)}</span>` : ''}
       </div>
-      <div class="poll-item-deadline">⏰ 마감까지 ${escapeHtml(remaining)}</div>
+      <div class="poll-item-deadline">
+        <span class="poll-item-deadline-label">⏰ 마감까지</span>
+        <span class="poll-item-deadline-clock">${escapeHtml(formatClock(p.deadline))}</span>
+      </div>
     </a>
   `;
 }

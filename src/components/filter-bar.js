@@ -1,3 +1,5 @@
+import { categorySlug } from '../lib/config.js';
+
 function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -11,7 +13,8 @@ export function filterBarHtml({ categories, selectedCategory, query }) {
     .map((c) => {
       const value = c === '전체' ? '' : c;
       const active = (selectedCategory || '') === value;
-      return `<button type="button" class="chip ${active ? 'is-active' : ''}" data-category="${escapeHtml(value)}">${escapeHtml(c)}</button>`;
+      const slugClass = value ? ` chip--${categorySlug(value)}` : '';
+      return `<button type="button" class="chip${slugClass} ${active ? 'is-active' : ''}" data-category="${escapeHtml(value)}">${escapeHtml(c)}</button>`;
     })
     .join('');
 

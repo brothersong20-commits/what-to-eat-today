@@ -313,6 +313,22 @@ textarea {
   border-color: var(--green-accent);
   color: #fff;
 }
+.chip--han:hover { border-color: var(--cat-han-fg); color: var(--cat-han-fg); }
+.chip--han.is-active { background: var(--cat-han-fg); border-color: var(--cat-han-fg); color: #fff; }
+.chip--jung:hover { border-color: var(--cat-jung-fg); color: var(--cat-jung-fg); }
+.chip--jung.is-active { background: var(--cat-jung-fg); border-color: var(--cat-jung-fg); color: #fff; }
+.chip--il:hover { border-color: var(--cat-il-fg); color: var(--cat-il-fg); }
+.chip--il.is-active { background: var(--cat-il-fg); border-color: var(--cat-il-fg); color: #fff; }
+.chip--yang:hover { border-color: var(--cat-yang-fg); color: var(--cat-yang-fg); }
+.chip--yang.is-active { background: var(--cat-yang-fg); border-color: var(--cat-yang-fg); color: #fff; }
+.chip--bun:hover { border-color: var(--cat-bun-fg); color: var(--cat-bun-fg); }
+.chip--bun.is-active { background: var(--cat-bun-fg); border-color: var(--cat-bun-fg); color: #fff; }
+.chip--hoe:hover { border-color: var(--cat-hoe-fg); color: var(--cat-hoe-fg); }
+.chip--hoe.is-active { background: var(--cat-hoe-fg); border-color: var(--cat-hoe-fg); color: #fff; }
+.chip--gogi:hover { border-color: var(--cat-gogi-fg); color: var(--cat-gogi-fg); }
+.chip--gogi.is-active { background: var(--cat-gogi-fg); border-color: var(--cat-gogi-fg); color: #fff; }
+.chip--etc:hover { border-color: var(--cat-etc-fg); color: var(--cat-etc-fg); }
+.chip--etc.is-active { background: var(--cat-etc-fg); border-color: var(--cat-etc-fg); color: #fff; }
 
 /* ───── State messages ───── */
 .state {
@@ -391,9 +407,28 @@ textarea {
   color: var(--text-soft);
 }
 .poll-item-deadline {
-  font-size: 1.3rem;
-  font-weight: 600;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-weight: 700;
   color: var(--green-accent);
+}
+.poll-item-deadline-label {
+  font-size: 1.3rem;
+}
+.poll-item-deadline-clock {
+  font-size: 2.0rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.poll-item.is-expired {
+  opacity: 0.55;
+}
+.poll-item.is-expired .poll-item-deadline {
+  color: var(--text-soft);
+}
+.poll-item.is-expired .poll-item-deadline-label {
+  display: none;
 }
 
 /* ───── Restaurant card ───── */
@@ -441,13 +476,21 @@ textarea {
 .rc-badge {
   display: inline-flex;
   align-items: center;
-  background: var(--green-light);
-  color: var(--green-starbucks);
+  background: var(--cat-etc-bg);
+  color: var(--cat-etc-fg);
   font-size: 1.2rem;
   font-weight: 600;
   padding: 0.3rem 0.8rem;
   border-radius: var(--radius-pill);
 }
+.rc-badge--han { background: var(--cat-han-bg); color: var(--cat-han-fg); }
+.rc-badge--jung { background: var(--cat-jung-bg); color: var(--cat-jung-fg); }
+.rc-badge--il { background: var(--cat-il-bg); color: var(--cat-il-fg); }
+.rc-badge--yang { background: var(--cat-yang-bg); color: var(--cat-yang-fg); }
+.rc-badge--bun { background: var(--cat-bun-bg); color: var(--cat-bun-fg); }
+.rc-badge--hoe { background: var(--cat-hoe-bg); color: var(--cat-hoe-fg); }
+.rc-badge--gogi { background: var(--cat-gogi-bg); color: var(--cat-gogi-fg); }
+.rc-badge--etc { background: var(--cat-etc-bg); color: var(--cat-etc-fg); }
 .rc-meta {
   font-size: 1.3rem;
   color: var(--text-soft);
@@ -457,12 +500,28 @@ textarea {
   font-size: 1.3rem;
   color: var(--text-soft);
 }
-.rc-naver-link {
-  color: var(--green-accent);
-  font-weight: 600;
+.rc-map-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  margin-left: var(--space-1);
+  vertical-align: -0.3rem;
+  background: var(--naver-green);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 50%;
+  text-decoration: none;
+  transition: background var(--duration) var(--ease);
 }
-.rc-naver-link:hover {
-  text-decoration: underline;
+.rc-map-link:hover {
+  background: var(--naver-green-strong);
+}
+.rc-map-link:active {
+  transform: scale(var(--press-scale));
 }
 .rc-menus {
   margin-top: var(--space-1);
@@ -578,9 +637,23 @@ textarea {
   color: var(--text-on-dark-soft);
 }
 .vote-countdown {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
   font-weight: 700;
   color: #fff;
+}
+.vote-countdown-label {
   font-size: 1.6rem;
+}
+.vote-countdown-clock {
+  font-size: 2.8rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.vote-countdown.is-expired .vote-countdown-clock {
+  font-size: 1.8rem;
+  letter-spacing: 0;
 }
 
 .attendance-row {

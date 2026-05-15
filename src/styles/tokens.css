@@ -6,6 +6,28 @@
   --green-uplift: #2b5148;
   --green-light: #d4e9e2;
 
+  /* ───── Color: Category (tone-on-tone, low-saturation) ───── */
+  --cat-han-bg: #ecdcd3;   /* 한식 — 적갈/clay */
+  --cat-han-fg: #8a4b35;
+  --cat-jung-bg: #f3ddd8;  /* 중식 — 주홍/vermilion */
+  --cat-jung-fg: #a83a2b;
+  --cat-il-bg: #dbe1ee;    /* 일식 — 남색/indigo */
+  --cat-il-fg: #3a5080;
+  --cat-yang-bg: #f0e7cf;  /* 양식 — 호박/amber */
+  --cat-yang-fg: #8a6a22;
+  --cat-bun-bg: #f1dde5;   /* 분식 — 로즈/rose */
+  --cat-bun-fg: #9c4768;
+  --cat-hoe-bg: #d3e8e5;   /* 회 — 청록/teal */
+  --cat-hoe-fg: #2e6e68;
+  --cat-gogi-bg: #e9dad6;  /* 고기 — 자주갈/maroon */
+  --cat-gogi-fg: #7c3f38;
+  --cat-etc-bg: #e3e5df;   /* 기타/미매칭 — 중립 세이지 */
+  --cat-etc-fg: #586054;
+
+  /* ───── Color: Naver brand (지도 CTA 한정) ───── */
+  --naver-green: #03c75a;
+  --naver-green-strong: #02a94c;
+
   /* ───── Color: Surface ───── */
   --canvas: #f2f0eb;         /* Neutral Warm — page canvas */
   --canvas-2: #edebe9;       /* Ceramic — section separators */

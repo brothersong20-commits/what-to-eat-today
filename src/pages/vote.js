@@ -1,5 +1,5 @@
 import { loadRestaurants, loadPoll, submitVote } from '../lib/supabase.js';
-import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
+import { isPastDeadline, formatClock, formatEventDateTime } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
@@ -80,7 +80,10 @@ export async function renderVote(app, { id: pollId }) {
         <span>🍽 ${escapeHtml(poll.mealType || '회식')}</span>
         <span>📅 ${escapeHtml(formatEventDateTime(poll.eventDate, poll.eventTime))}</span>
       </div>
-      <div class="vote-countdown" id="countdown">마감까지: 계산 중...</div>
+      <div class="vote-countdown" id="countdown">
+        <span class="vote-countdown-label">⏰ 마감까지</span>
+        <span class="vote-countdown-clock">--:--:--</span>
+      </div>
       ${poll.description ? `<p>${escapeHtml(poll.description)}</p>` : ''}
     </section>
 
@@ -134,12 +137,16 @@ export async function renderVote(app, { id: pollId }) {
 
   // ─── countdown ─────────────────────────────────────────
   const countdownEl = root.querySelector('#countdown');
+  const labelEl = countdownEl.querySelector('.vote-countdown-label');
+  const clockEl = countdownEl.querySelector('.vote-countdown-clock');
   function tickCountdown() {
     if (isPastDeadline(poll.deadline)) {
-      countdownEl.textContent = '⏰ 마감되었습니다';
+      labelEl.textContent = '⏰';
+      clockEl.textContent = '마감되었습니다';
+      countdownEl.classList.add('is-expired');
       return false;
     }
-    countdownEl.textContent = `⏰ 마감까지: ${formatRemaining(poll.deadline)}`;
+    clockEl.textContent = formatClock(poll.deadline);
     return true;
   }
   tickCountdown();

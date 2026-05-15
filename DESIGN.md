@@ -73,6 +73,25 @@ Two parallel translucent scales for overlay and secondary-text use:
 
 No structural gradient tokens observed. Surface hierarchy is solid-color-block throughout — the system relies on its five-tier cream/green surface palette rather than gradients.
 
+### App Extension: Category Colors (tone-on-tone)
+
+식당 카테고리를 한눈에 구분하기 위한 저채도 톤온톤 8종. 각 항목은 연한 배경(`*-bg`) + 진한 동일 계열 글자(`*-fg`) 쌍으로, 따뜻한 크림 캔버스(`#f2f0eb`)와 충돌하지 않게 채도를 낮췄다. 카드 배지(`.rc-badge--*`)와 필터 칩(`.chip--*` hover/active) 양쪽에 동일 토큰을 사용한다. DB에 정의 외 카테고리가 오면 `etc`(중립 세이지)로 폴백한다.
+
+| 카테고리 | slug | bg | fg | 톤 |
+|---|---|---|---|---|
+| 한식 | `han` | `#ecdcd3` | `#8a4b35` | 적갈/clay |
+| 중식 | `jung` | `#f3ddd8` | `#a83a2b` | 주홍/vermilion |
+| 일식 | `il` | `#dbe1ee` | `#3a5080` | 남색/indigo |
+| 양식 | `yang` | `#f0e7cf` | `#8a6a22` | 호박/amber |
+| 분식 | `bun` | `#f1dde5` | `#9c4768` | 로즈/rose |
+| 회 | `hoe` | `#d3e8e5` | `#2e6e68` | 청록/teal |
+| 고기 | `gogi` | `#e9dad6` | `#7c3f38` | 자주갈/maroon |
+| 기타/미매칭 | `etc` | `#e3e5df` | `#586054` | 중립 세이지 |
+
+### App Extension: Naver Brand Exception
+
+- **Naver Green** (`#03C75A`) / **Naver Green Strong** (`#02A94C` hover): 주소 옆 작은 네이버 지도 화살표 링크(`.rc-map-link`) 전용. 주소명은 평문으로 두고 화살표 아이콘에만 브랜드 색 배경을 입힌 유일한 예외이며, 그 외 어디에도 사용하지 않는다.
+
 ## 3. Typography Rules
 
 ### Font Family
