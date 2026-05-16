@@ -520,3 +520,154 @@ grant execute on function public.create_restaurant(text, text, text, text, text,
 grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────
+-- 8. 분류 옵션 (카테고리·지역) — 관리자가 추가/수정/삭제
+--    식당의 category/area는 자유 텍스트라 FK 없음.
+--    이름 변경(update)은 기존 식당 값도 함께 일괄 갱신(cascade).
+--    삭제(delete)는 드롭다운 목록에서만 제거 — 식당 값은 보존.
+-- ─────────────────────────────────────────────────────────
+create table if not exists public.app_options (
+  kind        text not null check (kind in ('category','area')),
+  value       text not null,
+  sort_order  int  not null default 0,
+  created_at  timestamptz not null default now(),
+  primary key (kind, value)
+);
+
+alter table public.app_options enable row level security;
+drop policy if exists app_options_read on public.app_options;
+create policy app_options_read on public.app_options for select using (true);
+
+-- create_option — 신규 분류 항목. 중복 시 'option_already_exists'.
+create or replace function public.create_option(
+  p_admin_key text,
+  p_kind      text,
+  p_value     text
+) returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected text;
+  v_value    text;
+begin
+  select value into v_expected from private.app_config where key = 'admin_key';
+  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+    raise exception 'unauthorized';
+  end if;
+  if p_kind not in ('category', 'area') then
+    raise exception 'invalid_kind';
+  end if;
+  v_value := btrim(coalesce(p_value, ''));
+  if v_value = '' then
+    raise exception 'missing_required_fields';
+  end if;
+  if exists (select 1 from public.app_options where kind = p_kind and value = v_value) then
+    raise exception 'option_already_exists';
+  end if;
+  insert into public.app_options (kind, value, sort_order)
+  values (
+    p_kind, v_value,
+    coalesce((select max(sort_order) from public.app_options where kind = p_kind), 0) + 1
+  );
+  return v_value;
+end;
+$$;
+
+-- update_option — 이름 변경. 기존 식당의 같은 값도 함께 갱신.
+create or replace function public.update_option(
+  p_admin_key  text,
+  p_kind       text,
+  p_old_value  text,
+  p_new_value  text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected text;
+  v_old      text;
+  v_new      text;
+begin
+  select value into v_expected from private.app_config where key = 'admin_key';
+  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+    raise exception 'unauthorized';
+  end if;
+  if p_kind not in ('category', 'area') then
+    raise exception 'invalid_kind';
+  end if;
+  v_old := btrim(coalesce(p_old_value, ''));
+  v_new := btrim(coalesce(p_new_value, ''));
+  if v_new = '' then
+    raise exception 'missing_required_fields';
+  end if;
+  if not exists (select 1 from public.app_options where kind = p_kind and value = v_old) then
+    raise exception 'option_not_found';
+  end if;
+  if v_old <> v_new and exists (select 1 from public.app_options where kind = p_kind and value = v_new) then
+    raise exception 'option_already_exists';
+  end if;
+  if v_old = v_new then
+    return;
+  end if;
+
+  update public.app_options set value = v_new where kind = p_kind and value = v_old;
+
+  if p_kind = 'category' then
+    update public.restaurants set category = v_new where category = v_old;
+  elsif p_kind = 'area' then
+    update public.restaurants set area = v_new where area = v_old;
+  end if;
+end;
+$$;
+
+-- delete_option — 목록에서만 제거. 식당의 기존 값은 보존.
+create or replace function public.delete_option(
+  p_admin_key text,
+  p_kind      text,
+  p_value     text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected text;
+  v_count    int;
+begin
+  select value into v_expected from private.app_config where key = 'admin_key';
+  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+    raise exception 'unauthorized';
+  end if;
+  delete from public.app_options where kind = p_kind and value = btrim(coalesce(p_value, ''));
+  get diagnostics v_count = row_count;
+  if v_count = 0 then
+    raise exception 'option_not_found';
+  end if;
+end;
+$$;
+
+grant execute on function public.create_option(text, text, text)        to anon, authenticated;
+grant execute on function public.update_option(text, text, text, text)  to anon, authenticated;
+grant execute on function public.delete_option(text, text, text)        to anon, authenticated;
+
+-- 기본 분류 시드 (멱등). config.js의 CATEGORIES·AREAS와 동일 순서.
+insert into public.app_options (kind, value, sort_order) values
+  ('category', '한식', 1),
+  ('category', '중식', 2),
+  ('category', '일식', 3),
+  ('category', '양식', 4),
+  ('category', '분식', 5),
+  ('category', '회',   6),
+  ('category', '고기', 7),
+  ('category', '기타', 8),
+  ('area', '아트포레',     1),
+  ('area', '송해원',       2),
+  ('area', '푸르지오시티', 3),
+  ('area', 'IBS타워',      4),
+  ('area', '커낼워크',     5),
+  ('area', '인천대입구',   6)
+on conflict (kind, value) do nothing;

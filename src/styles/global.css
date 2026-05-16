@@ -1791,6 +1791,66 @@ textarea {
   font-size: 1.3rem;
 }
 
+/* ───── 분류 관리 탭 ───── */
+.opt-cols {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.opt-cols > * {
+  flex: 1;
+  min-width: 26rem;
+}
+.opt-list {
+  display: flex;
+  flex-direction: column;
+}
+.opt-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.6rem 0.2rem;
+  border-bottom: 1px solid var(--border-input);
+}
+.opt-row:last-child {
+  border-bottom: none;
+}
+.opt-val {
+  flex: 1;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.opt-edit {
+  flex: 1;
+  min-width: 0;
+}
+.opt-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+.opt-actions .btn {
+  padding: 0.4rem 0.9rem;
+}
+.opt-row .opt-edit,
+.opt-row .opt-save,
+.opt-row .opt-cancel {
+  display: none;
+}
+.opt-row.is-editing .opt-val,
+.opt-row.is-editing .opt-rename,
+.opt-row.is-editing .opt-delete {
+  display: none;
+}
+.opt-row.is-editing .opt-edit {
+  display: block;
+}
+.opt-row.is-editing .opt-save,
+.opt-row.is-editing .opt-cancel {
+  display: inline-flex;
+}
+
 /* ───── 식당 관리 탭 ───── */
 .rest-list {
   display: flex;

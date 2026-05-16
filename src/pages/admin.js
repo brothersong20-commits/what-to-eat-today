@@ -1,4 +1,4 @@
-import { createPoll, updatePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive } from '../lib/supabase.js';
+import { createPoll, updatePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive, loadOptions, createOption, updateOption, deleteOption } from '../lib/supabase.js';
 import { CATEGORIES, AREAS, categorySlug } from '../lib/config.js';
 import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
@@ -119,6 +119,7 @@ function renderShell(root, { initialTab = 'active', autoOpenPollId = null } = {}
       <button type="button" class="admin-tab" data-tab="active" role="tab">진행중인 투표</button>
       <button type="button" class="admin-tab" data-tab="new" role="tab">새 투표 만들기</button>
       <button type="button" class="admin-tab" data-tab="restaurants" role="tab">식당 관리</button>
+      <button type="button" class="admin-tab" data-tab="options" role="tab">분류 관리</button>
       <button type="button" class="btn btn-ghost admin-logout" id="admin-logout">로그아웃</button>
     </div>
     <div id="admin-tab-body"></div>
@@ -132,6 +133,7 @@ function renderShell(root, { initialTab = 'active', autoOpenPollId = null } = {}
     runAllCleanups();
     if (tab === 'active') renderActiveList(body, root, { autoOpenPollId });
     else if (tab === 'restaurants') renderRestaurantsTab(body, root);
+    else if (tab === 'options') renderOptionsTab(body, root);
     else renderForm(body, root);
   }
 
@@ -948,8 +950,14 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
   mount.innerHTML = `<div class="state"><p>식당 목록을 불러오는 중...</p></div>`;
 
   let restaurants = [];
+  let options = { categories: CATEGORIES, areas: AREAS };
   try {
-    restaurants = await loadRestaurants({ includeInactive: true });
+    const [rs, opts] = await Promise.all([
+      loadRestaurants({ includeInactive: true }),
+      loadOptions().catch(() => ({ categories: CATEGORIES, areas: AREAS }))
+    ]);
+    restaurants = rs;
+    if (opts.categories.length || opts.areas.length) options = opts;
   } catch (err) {
     mount.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
     return;
@@ -976,7 +984,7 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
           <h3>${editing ? `식당 수정 — ${escapeHtml(editing.name)}` : '새 식당 추가'}</h3>
           ${editing ? '' : `<p class="text-soft fs-small">ID는 짧고 고유한 식별자 (예: R006). 이름과 ID는 필수.</p>`}
         </div>
-        ${restaurantFormHtml(editing)}
+        ${restaurantFormHtml(editing, options)}
         <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
           <div class="row-2">
             ${editing ? `
@@ -1139,6 +1147,150 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
   });
 }
 
+// ─────────────────────────────────────────────────────────
+// 분류 관리 (카테고리·지역 옵션 CRUD)
+// ─────────────────────────────────────────────────────────
+async function renderOptionsTab(mount, shellRoot) {
+  mount.innerHTML = `<div class="state"><p>분류 목록을 불러오는 중...</p></div>`;
+
+  let options;
+  try {
+    options = await loadOptions();
+  } catch (err) {
+    mount.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
+    return;
+  }
+
+  mount.innerHTML = `
+    <section class="stack-4">
+      <div>
+        <h2>분류 관리</h2>
+        <p class="text-soft fs-small">카테고리·지역 항목을 추가·이름변경·삭제합니다. <strong>이름변경</strong> 시 그 값을 쓰던 기존 식당도 함께 바뀝니다. <strong>삭제</strong>는 목록에서만 빠지고 식당의 기존 값은 유지됩니다.</p>
+      </div>
+      <div class="opt-cols">
+        ${optionPanelHtml('category', '카테고리', options.categories)}
+        ${optionPanelHtml('area', '지역', options.areas)}
+      </div>
+    </section>
+  `;
+
+  const reload = () => renderOptionsTab(mount, shellRoot);
+
+  mount.querySelectorAll('.opt-add-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const kind = btn.dataset.kind;
+      const input = mount.querySelector(`.opt-add-input[data-kind="${kind}"]`);
+      const value = (input.value || '').trim();
+      if (!value) {
+        showToast('항목 이름을 입력해주세요', { error: true });
+        return;
+      }
+      try {
+        await createOption({ adminKey: getStoredKey(), kind, value });
+        showToast('추가되었습니다');
+        reload();
+      } catch (err) {
+        handleAdminError(err, mount, shellRoot);
+      }
+    });
+  });
+
+  mount.querySelectorAll('.opt-add-input').forEach((inp) => {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      mount.querySelector(`.opt-add-btn[data-kind="${inp.dataset.kind}"]`).click();
+    });
+  });
+
+  mount.querySelectorAll('.opt-list').forEach((list) => {
+    list.addEventListener('click', async (e) => {
+      const row = e.target.closest('.opt-row');
+      if (!row) return;
+      const kind = row.dataset.kind;
+      const value = row.dataset.value;
+
+      if (e.target.closest('.opt-rename')) {
+        row.classList.add('is-editing');
+        const edit = row.querySelector('.opt-edit');
+        edit.focus();
+        edit.select();
+      } else if (e.target.closest('.opt-cancel')) {
+        row.classList.remove('is-editing');
+        row.querySelector('.opt-edit').value = value;
+      } else if (e.target.closest('.opt-save')) {
+        const next = (row.querySelector('.opt-edit').value || '').trim();
+        if (!next) {
+          showToast('이름을 입력해주세요', { error: true });
+          return;
+        }
+        if (next === value) {
+          row.classList.remove('is-editing');
+          return;
+        }
+        try {
+          await updateOption({ adminKey: getStoredKey(), kind, oldValue: value, newValue: next });
+          showToast('변경되었습니다');
+          reload();
+        } catch (err) {
+          handleAdminError(err, mount, shellRoot);
+        }
+      } else if (e.target.closest('.opt-delete')) {
+        try {
+          await deleteOption({ adminKey: getStoredKey(), kind, value });
+          showToast('삭제되었습니다');
+          reload();
+        } catch (err) {
+          handleAdminError(err, mount, shellRoot);
+        }
+      }
+    });
+
+    list.addEventListener('keydown', (e) => {
+      const inp = e.target.closest('.opt-edit');
+      if (!inp) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        inp.closest('.opt-row').querySelector('.opt-save').click();
+      } else if (e.key === 'Escape') {
+        inp.closest('.opt-row').querySelector('.opt-cancel').click();
+      }
+    });
+  });
+}
+
+function optionPanelHtml(kind, title, values) {
+  const rows =
+    values.map((v) => optionRowHtml(kind, v)).join('') ||
+    `<p class="text-soft fs-small">항목이 없습니다.</p>`;
+  return `
+    <section class="card stack-3">
+      <h3>${escapeHtml(title)} <span class="text-soft fs-small">(${values.length})</span></h3>
+      <div class="opt-list">${rows}</div>
+      <div class="row-2" style="gap: var(--space-2);">
+        <input type="text" class="input opt-add-input" data-kind="${kind}" placeholder="새 ${escapeHtml(title)} 추가" autocomplete="off" />
+        <button type="button" class="btn btn-outline opt-add-btn" data-kind="${kind}">추가</button>
+      </div>
+    </section>
+  `;
+}
+
+function optionRowHtml(kind, value) {
+  const v = escapeHtml(value);
+  return `
+    <div class="opt-row" data-kind="${kind}" data-value="${v}">
+      <span class="opt-val">${v}</span>
+      <input type="text" class="input opt-edit" value="${v}" autocomplete="off" />
+      <div class="opt-actions">
+        <button type="button" class="btn btn-ghost fs-small opt-rename">이름변경</button>
+        <button type="button" class="btn btn-ghost fs-small opt-save">저장</button>
+        <button type="button" class="btn btn-ghost fs-small opt-cancel">취소</button>
+        <button type="button" class="btn btn-ghost fs-small rf-danger opt-delete">삭제</button>
+      </div>
+    </div>
+  `;
+}
+
 function restaurantRowHtml(r, isEditing) {
   return `
     <div class="rest-row ${isEditing ? 'is-editing' : ''} ${r.active ? '' : 'is-inactive'}" data-restaurant-id="${escapeHtml(r.id)}">
@@ -1153,12 +1305,14 @@ function restaurantRowHtml(r, isEditing) {
   `;
 }
 
-function restaurantFormHtml(r) {
+function restaurantFormHtml(r, opts = {}) {
   const v = r || {};
+  const categories = opts.categories || CATEGORIES;
+  const areas = opts.areas || AREAS;
   const selectedCategory = v.category || '';
-  const isCustomCategory = selectedCategory && !CATEGORIES.includes(selectedCategory);
+  const isCustomCategory = selectedCategory && !categories.includes(selectedCategory);
   const selectedArea = v.area || '';
-  const isCustomArea = selectedArea && !AREAS.includes(selectedArea);
+  const isCustomArea = selectedArea && !areas.includes(selectedArea);
   return `
     <form id="rest-form" class="stack-4" novalidate>
       <section class="rf-section stack-3">
@@ -1179,7 +1333,7 @@ function restaurantFormHtml(r) {
             <label class="field-label" for="rf-category-select">카테고리</label>
             <select id="rf-category-select" class="input">
               <option value="">(없음)</option>
-              ${CATEGORIES.map((c) => `<option value="${escapeHtml(c)}" ${c === selectedCategory ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              ${categories.map((c) => `<option value="${escapeHtml(c)}" ${c === selectedCategory ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
               <option value="__custom__" ${isCustomCategory ? 'selected' : ''}>+ 직접 입력</option>
             </select>
             <input type="text" id="rf-category-input" class="input" ${isCustomCategory ? '' : 'hidden'} value="${isCustomCategory ? escapeHtml(selectedCategory) : ''}" placeholder="예: 퓨전" />
@@ -1188,7 +1342,7 @@ function restaurantFormHtml(r) {
             <label class="field-label" for="rf-area-select">지역</label>
             <select id="rf-area-select" class="input">
               <option value="">(없음)</option>
-              ${AREAS.map((a) => `<option value="${escapeHtml(a)}" ${a === selectedArea ? 'selected' : ''}>${escapeHtml(a)}</option>`).join('')}
+              ${areas.map((a) => `<option value="${escapeHtml(a)}" ${a === selectedArea ? 'selected' : ''}>${escapeHtml(a)}</option>`).join('')}
               <option value="__custom__" ${isCustomArea ? 'selected' : ''}>+ 직접 입력</option>
             </select>
             <input type="text" id="rf-area-input" class="input" ${isCustomArea ? '' : 'hidden'} value="${isCustomArea ? escapeHtml(selectedArea) : ''}" placeholder="예: 인천대입구" />

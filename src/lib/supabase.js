@@ -268,6 +268,56 @@ export async function setRestaurantActive({ adminKey, id, active }) {
 }
 
 // ─────────────────────────────────────────────────────────
+// 분류 옵션 (카테고리·지역) — 관리자 CRUD
+// ─────────────────────────────────────────────────────────
+export async function loadOptions() {
+  const { data, error } = await supabase
+    .from('app_options')
+    .select('kind, value, sort_order')
+    .order('kind')
+    .order('sort_order');
+  if (error) throw new Error(`분류 옵션 로딩 실패: ${error.message}`);
+  const categories = [];
+  const areas = [];
+  for (const row of data || []) {
+    if (row.kind === 'category') categories.push(row.value);
+    else if (row.kind === 'area') areas.push(row.value);
+  }
+  return { categories, areas };
+}
+
+export async function createOption({ adminKey, kind, value }) {
+  const { data, error } = await supabase.rpc('create_option', {
+    p_admin_key: adminKey || '',
+    p_kind: kind,
+    p_value: value
+  });
+  if (error) throwTranslated(error);
+  return { ok: true, value: data };
+}
+
+export async function updateOption({ adminKey, kind, oldValue, newValue }) {
+  const { error } = await supabase.rpc('update_option', {
+    p_admin_key: adminKey || '',
+    p_kind: kind,
+    p_old_value: oldValue,
+    p_new_value: newValue
+  });
+  if (error) throwTranslated(error);
+  return { ok: true };
+}
+
+export async function deleteOption({ adminKey, kind, value }) {
+  const { error } = await supabase.rpc('delete_option', {
+    p_admin_key: adminKey || '',
+    p_kind: kind,
+    p_value: value
+  });
+  if (error) throwTranslated(error);
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────
 // Realtime — votes 테이블 변경 구독
 // 반환된 channel은 호출 측에서 supabase.removeChannel(channel)로 정리.
 // ─────────────────────────────────────────────────────────
@@ -320,6 +370,9 @@ function translateError(code) {
     case 'id_collision_exhausted':  return '같은 날짜에 너무 많은 투표가 생성되었습니다. 잠시 후 다시 시도해주세요.';
     case 'id_already_exists':       return '같은 ID의 식당이 이미 있습니다.';
     case 'restaurant_not_found':    return '존재하지 않는 식당입니다.';
+    case 'option_already_exists':   return '같은 분류 항목이 이미 있습니다.';
+    case 'option_not_found':        return '존재하지 않는 분류 항목입니다.';
+    case 'invalid_kind':            return '분류 종류 값이 올바르지 않습니다.';
     default:                        return code || '알 수 없는 오류가 발생했습니다.';
   }
 }
