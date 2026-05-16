@@ -457,6 +457,29 @@ begin
 end;
 $$;
 
+create or replace function public.delete_poll(
+  p_admin_key text,
+  p_poll_id   text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected text;
+begin
+  select value into v_expected from private.app_config where key = 'admin_key';
+  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+    raise exception 'unauthorized';
+  end if;
+  if not exists (select 1 from public.polls where id = p_poll_id) then
+    raise exception 'poll_not_found';
+  end if;
+  -- votes 는 poll_id FK on delete cascade → 함께 삭제됨
+  delete from public.polls where id = p_poll_id;
+end;
+$$;
+
 create or replace function public.set_restaurant_active(
   p_admin_key text,
   p_id        text,
@@ -519,6 +542,7 @@ grant execute on function public.update_poll(text, text, text, text, date, time,
 grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, boolean)     to anon, authenticated;
 grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
+grant execute on function public.delete_poll(text, text)                                       to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────

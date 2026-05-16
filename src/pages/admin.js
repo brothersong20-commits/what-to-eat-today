@@ -1,10 +1,10 @@
-import { createPoll, updatePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive, loadOptions, createOption, updateOption, deleteOption } from '../lib/supabase.js';
+import { createPoll, updatePoll, deletePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive, loadOptions, createOption, updateOption, deleteOption } from '../lib/supabase.js';
 import { CATEGORIES, AREAS, categorySlug } from '../lib/config.js';
 import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
 import { tally } from '../lib/tally.js';
-import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
+import { isPastDeadline, formatRemaining, formatEventDateTime, deadlineUrgency } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
 import { buildShareUrl, openQrModal } from '../components/share.js';
 
@@ -75,7 +75,10 @@ function renderLogin(root) {
       </div>
       <div class="stack-3">
         <label class="field-label" for="admin-key">관리자 키</label>
-        <input type="password" id="admin-key" class="input" autocomplete="off" placeholder="키를 입력해주세요" />
+        <div class="input-wrap">
+          <input type="password" id="admin-key" class="input" autocomplete="off" placeholder="키를 입력해주세요" />
+          <span class="caps-hint" id="admin-caps-hint" hidden>⇪ Caps Lock 켜짐</span>
+        </div>
         <p class="field-error" id="admin-key-error" hidden>관리자 키가 올바르지 않습니다.</p>
       </div>
       <button class="btn btn-primary btn-block" id="admin-login-btn">확인</button>
@@ -84,6 +87,7 @@ function renderLogin(root) {
 
   const input = root.querySelector('#admin-key');
   const errorEl = root.querySelector('#admin-key-error');
+  const capsHint = root.querySelector('#admin-caps-hint');
   const btn = root.querySelector('#admin-login-btn');
   input.focus();
 
@@ -92,13 +96,21 @@ function renderLogin(root) {
     errorEl.hidden = false;
   }
 
+  function syncCaps(e) {
+    const on = typeof e.getModifierState === 'function' && e.getModifierState('CapsLock');
+    capsHint.hidden = !on;
+  }
+
   input.addEventListener('input', () => {
     input.classList.remove('has-error');
     errorEl.hidden = true;
   });
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); btn.click(); }
+    if (e.key === 'Enter') { e.preventDefault(); btn.click(); return; }
+    syncCaps(e);
   });
+  input.addEventListener('keyup', syncCaps);
+  input.addEventListener('blur', () => { capsHint.hidden = true; });
   btn.addEventListener('click', () => {
     const value = input.value.trim();
     if (!value) { showError(); input.focus(); return; }
@@ -226,11 +238,17 @@ function pollCardHtml(p) {
   const remaining = closed ? '마감됨' : `마감까지 ${formatRemaining(p.deadline)}`;
   const candidateCount = p.restaurantIds?.length || 0;
   const removedCount = p.removedRestaurantIds?.length || 0;
+  const urg = closed ? null : deadlineUrgency(p.deadline);
+  const badge = closed
+    ? { cls: 'is-closed', text: '마감' }
+    : urg
+      ? { cls: `is-${urg}`, text: '마감임박' }
+      : { cls: 'is-active', text: '진행중' };
   return `
     <a class="poll-item poll-item--admin ${closed ? 'is-closed' : ''}" href="#" data-poll-id="${escapeHtml(p.id)}">
       <div class="poll-item-admin-head">
         <div class="poll-item-title">${escapeHtml(p.title)}</div>
-        <span class="poll-badge ${closed ? 'is-closed' : 'is-active'}">${closed ? '마감' : '진행중'}</span>
+        <span class="poll-badge ${badge.cls}">${badge.text}</span>
       </div>
       <div class="poll-item-meta">
         ${p.mealType ? `<span class="poll-item-meal">🍽 ${escapeHtml(p.mealType)}</span>` : ''}
@@ -261,6 +279,7 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
   mount.innerHTML = `
     <div class="detail-toolbar">
       <button type="button" class="btn btn-ghost" id="detail-back">← 목록으로</button>
+      <button type="button" class="btn btn-ghost rf-danger" id="detail-delete" style="margin-left: auto;">투표 삭제</button>
     </div>
     <div class="card detail-share">
       <span class="rf-section-title">공유 링크</span>
@@ -356,6 +375,20 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
   mount.querySelector('#detail-back').addEventListener('click', () => {
     runAllCleanups();
     renderActiveList(mount, shellRoot);
+  });
+
+  mount.querySelector('#detail-delete').addEventListener('click', async () => {
+    if (!confirm(`정말 "${poll.title}" 투표를 삭제할까요?\n이 투표에 등록된 모든 표가 함께 삭제되며 되돌릴 수 없습니다.`)) return;
+    try {
+      await deletePoll({ adminKey: getStoredKey(), pollId: poll.id });
+      const idx = allPolls.findIndex((p) => p.id === poll.id);
+      if (idx >= 0) allPolls.splice(idx, 1);
+      showToast('투표가 삭제되었습니다');
+      runAllCleanups();
+      renderActiveList(mount, shellRoot);
+    } catch (err) {
+      handleAdminError(err, mount, shellRoot);
+    }
   });
 
   const urlInput = mount.querySelector('#detail-share-url');
@@ -982,9 +1015,9 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
       <section class="card stack-4">
         <div class="stack-3">
           <h3>${editing ? `식당 수정 — ${escapeHtml(editing.name)}` : '새 식당 추가'}</h3>
-          ${editing ? '' : `<p class="text-soft fs-small">ID는 짧고 고유한 식별자 (예: R006). 이름과 ID는 필수.</p>`}
+          ${editing ? '' : `<p class="text-soft fs-small">ID는 자동 부여됩니다. 이름은 필수.</p>`}
         </div>
-        ${restaurantFormHtml(editing, options)}
+        ${restaurantFormHtml(editing, { ...options, nextId: nextRestaurantId(restaurants) })}
         <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
           <div class="row-2">
             ${editing ? `
@@ -1108,7 +1141,7 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
     const note = (mount.querySelector('#rf-note').value || '').trim();
 
     if (!id || !name) {
-      showToast('ID와 이름은 필수입니다', { error: true });
+      showToast('이름은 필수입니다', { error: true });
       return;
     }
     if (naverUrl && !/^https?:\/\//i.test(naverUrl)) {
@@ -1305,6 +1338,15 @@ function restaurantRowHtml(r, isEditing) {
   `;
 }
 
+function nextRestaurantId(restaurants) {
+  let max = 0;
+  for (const r of restaurants) {
+    const m = /^R(\d+)$/i.exec(r.id || '');
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `R${String(max + 1).padStart(3, '0')}`;
+}
+
 function restaurantFormHtml(r, opts = {}) {
   const v = r || {};
   const categories = opts.categories || CATEGORIES;
@@ -1319,9 +1361,9 @@ function restaurantFormHtml(r, opts = {}) {
         <h4 class="rf-section-title">기본 정보</h4>
         <div class="row-2" style="flex-wrap: wrap; gap: var(--space-3);">
           <div class="stack-3" style="flex: 1; min-width: 12rem;">
-            <label class="field-label" for="rf-id">ID ${r ? '(수정 불가)' : ''}</label>
-            <input type="text" id="rf-id" class="input" value="${escapeHtml(v.id || '')}" ${r ? 'disabled' : ''} placeholder="예: R006" />
-            ${r ? '' : `<p class="text-soft fs-small">짧고 고유한 식별자. 한 번 정하면 바꿀 수 없습니다.</p>`}
+            <label class="field-label" for="rf-id">ID ${r ? '(수정 불가)' : '(자동 부여)'}</label>
+            <input type="text" id="rf-id" class="input${r ? '' : ' input--plain'}" value="${escapeHtml(r ? (v.id || '') : (opts.nextId || ''))}" ${r ? 'disabled' : 'readonly'} placeholder="예: R006" />
+            ${r ? '' : `<p class="text-soft fs-small">기존 R번호 중 가장 큰 값 +1 로 자동 부여됩니다.</p>`}
           </div>
           <div class="stack-3" style="flex: 2; min-width: 16rem;">
             <label class="field-label" for="rf-name">이름 *</label>

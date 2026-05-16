@@ -257,6 +257,15 @@ export async function deleteRestaurant({ adminKey, id }) {
   return { ok: true };
 }
 
+export async function deletePoll({ adminKey, pollId }) {
+  const { error } = await supabase.rpc('delete_poll', {
+    p_admin_key: adminKey || '',
+    p_poll_id: pollId
+  });
+  if (error) throwTranslated(error);
+  return { ok: true };
+}
+
 export async function setRestaurantActive({ adminKey, id, active }) {
   const { error } = await supabase.rpc('set_restaurant_active', {
     p_admin_key: adminKey || '',

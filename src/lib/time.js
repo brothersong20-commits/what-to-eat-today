@@ -63,6 +63,28 @@ export function clockParts(deadlineText, now = new Date()) {
   };
 }
 
+// 마감 임박 임계값(초) — flip 시계 색·관리자 배지가 공유하는 단일 출처.
+export const URGENCY_WARN_SEC = 10800; // 3시간
+export const URGENCY_DANGER_SEC = 3600; // 1시간
+
+/**
+ * clockParts() 결과에서 임박 단계 파생: 1h 이하 'danger', 3h 이하 'warn', 그 외/만료 null.
+ */
+export function urgencyFromParts(p) {
+  if (!p || p.expired) return null;
+  const total = (((p.days || 0) * 24 + p.h) * 60 + p.m) * 60 + p.s;
+  if (total <= URGENCY_DANGER_SEC) return 'danger';
+  if (total <= URGENCY_WARN_SEC) return 'warn';
+  return null;
+}
+
+/**
+ * 마감 텍스트에서 직접 임박 단계 산출('danger' | 'warn' | null).
+ */
+export function deadlineUrgency(deadlineText, now = new Date()) {
+  return urgencyFromParts(clockParts(deadlineText, now));
+}
+
 /**
  * 디지털 시계 스타일: "4일 22:35:12" 또는 "05:30:12". 음수면 "마감됨".
  */
@@ -78,13 +100,15 @@ export function formatClock(deadlineText, now = new Date()) {
 }
 
 /**
- * 마감 후 graceDays 일 이내인지. graceDays=3 이면 마감 후 72시간 동안 true.
+ * 마감 시각이 지났지만 '마감 날짜' 당일 자정(다음날 00:00) 이전이면 true.
+ * 마감 전이면 false (이 함수의 관심사 아님 — 호출부에서 isPastDeadline로 먼저 가드).
  */
-export function withinGracePeriod(deadlineText, graceDays = 3, now = new Date()) {
+export function withinDeadlineDay(deadlineText, now = new Date()) {
   const d = parseDeadline(deadlineText);
   if (!d) return false;
-  const diffMs = now.getTime() - d.getTime();
-  return diffMs >= 0 && diffMs <= graceDays * 86400 * 1000;
+  if (now <= d) return false;
+  const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+  return now < endOfDay;
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];

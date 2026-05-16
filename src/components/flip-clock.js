@@ -7,6 +7,8 @@
  * 표시는 숫자/한글 캡션(일·시간·분·초) 뿐이라 escape 불필요.
  */
 
+import { urgencyFromParts } from '../lib/time.js';
+
 const REDUCED =
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
@@ -32,8 +34,9 @@ export function flipClockHtml({ parts, size = 'lg', label = '⏰ 마감까지' }
   const h = pad2(p.h);
   const m = pad2(p.m);
   const s = pad2(p.s);
+  const urg = urgencyFromParts(p);
   return `
-    <div class="flip-clock flip-clock--${size}${p.expired ? ' is-expired' : ''}" data-deadline-clock>
+    <div class="flip-clock flip-clock--${size}${urg ? ` flip-clock--${urg}` : ''}${p.expired ? ' is-expired' : ''}" data-deadline-clock>
       <span class="flip-clock__label">${label}</span>
       <div class="flip-clock__groups">
         <span class="flip-group flip-group--days" data-group="days"${days > 0 ? '' : ' hidden'}>
@@ -112,6 +115,10 @@ function flipDigit(el, next) {
 
 export function updateFlipClock(rootEl, parts) {
   if (!rootEl || !parts) return;
+
+  const level = urgencyFromParts(parts);
+  rootEl.classList.toggle('flip-clock--warn', level === 'warn');
+  rootEl.classList.toggle('flip-clock--danger', level === 'danger');
 
   if (parts.expired) {
     rootEl.classList.add('is-expired');

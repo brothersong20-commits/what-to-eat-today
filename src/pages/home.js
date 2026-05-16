@@ -3,7 +3,7 @@ import { ATTENDANCE, categorySlug } from '../lib/config.js';
 import {
   isPastDeadline,
   clockParts,
-  withinGracePeriod,
+  withinDeadlineDay,
   formatEventDateTime
 } from '../lib/time.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
@@ -64,7 +64,7 @@ export async function renderHome(app) {
     .then(async (polls) => {
       const active = polls
         .filter((p) => p.status === 'active'
-          && (!isPastDeadline(p.deadline) || withinGracePeriod(p.deadline, 3)))
+          && (!isPastDeadline(p.deadline) || withinDeadlineDay(p.deadline)))
         .sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
       if (active.length === 0) return;
 
@@ -93,11 +93,23 @@ export async function renderHome(app) {
       function tickPollCountdowns() {
         pollsListEl.querySelectorAll('.poll-item').forEach((card) => {
           const deadline = card.dataset.deadline;
-          card.classList.toggle('is-expired', isPastDeadline(deadline));
+          const expired = isPastDeadline(deadline);
+          if (expired && !withinDeadlineDay(deadline)) {
+            card.remove();
+            return;
+          }
+          card.classList.toggle('is-expired', expired);
+          if (expired) {
+            const pollId = card.dataset.pollId || '';
+            card.setAttribute('href', `#/result/${encodeURIComponent(pollId)}`);
+            const cta = card.querySelector('.poll-item-cta');
+            if (cta) cta.textContent = '결과 보기';
+          }
           const clockEl = card.querySelector('[data-deadline-clock]');
           if (!clockEl) return;
           updateFlipClock(clockEl, clockParts(deadline));
         });
+        if (!pollsListEl.querySelector('.poll-item')) pollsSection.hidden = true;
       }
       tickPollCountdowns();
       const handle = setInterval(tickPollCountdowns, 1000);
@@ -184,9 +196,15 @@ function renderPollItem(p, stats, restaurantsById) {
       </div>`
     : '';
 
+  const href = expired
+    ? `#/result/${encodeURIComponent(p.id)}`
+    : `#/vote/${encodeURIComponent(p.id)}`;
+  const ctaText = expired ? '결과 보기' : '투표하러 가기';
+
   return `
     <a class="poll-item poll-item--countdown ${expired ? 'is-expired' : ''}"
-       href="#/vote/${encodeURIComponent(p.id)}"
+       href="${href}"
+       data-poll-id="${escapeHtml(p.id)}"
        data-deadline="${escapeHtml(p.deadline || '')}">
       <div class="poll-item-main">
         <div class="poll-item-title">${escapeHtml(p.title)}</div>
@@ -196,7 +214,7 @@ function renderPollItem(p, stats, restaurantsById) {
         </div>
         ${statsHtml}
         ${flipClockHtml({ parts: clockParts(p.deadline), size: 'md', label: '마감까지' })}
-        <span class="poll-item-cta">투표하러 가기</span>
+        <span class="poll-item-cta">${ctaText}</span>
       </div>
       ${asideHtml}
     </a>

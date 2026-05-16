@@ -51,6 +51,11 @@
   --danger-tint: hsl(4 82% 43% / 5%);
   --warning: #fbbc05;
   --success-tint: hsl(160 32% 87% / 33%);
+  /* 마감임박 배지 — is-active(연초록 bg + 진초록 fg) 패턴과 동일 톤 */
+  --badge-warn-bg: hsl(28 92% 48% / 14%);
+  --badge-warn-fg: #9a4709;
+  --badge-danger-bg: hsl(4 82% 43% / 12%);
+  --badge-danger-fg: var(--danger);
 
   /* ───── Border ───── */
   --border-soft: #e7e7e7;
@@ -111,6 +116,18 @@
   --flip-digit-w-sm: 2.2rem;
   --flip-digit-h-sm: 3.2rem;
   --flip-font-sm: 2.0rem;
+
+  /* ───── Flip clock — urgency (마감 임박) ───── */
+  /* 3h 이내: 주황 (--warning 은 노랑이라 별도 주황 정의) */
+  --flip-warn-bg: #b4540c;
+  --flip-warn-bg-2: #9a4709;
+  --flip-warn-digit: #fff7ec;
+  --flip-warn-divider: rgba(0, 0, 0, 0.5);
+  /* 1h 이내: 빨강 (--danger 계열) */
+  --flip-danger-bg: var(--danger);
+  --flip-danger-bg-2: #9c1810;
+  --flip-danger-digit: #ffffff;
+  --flip-danger-divider: rgba(0, 0, 0, 0.55);
 
   /* ───── Layout caps ───── */
   --column-sm: 343px;
