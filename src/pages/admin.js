@@ -4,7 +4,7 @@ import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
 import { tally } from '../lib/tally.js';
-import { isPastDeadline, formatRemaining, formatEventDateTime, deadlineUrgency } from '../lib/time.js';
+import { isPastDeadline, formatRemaining, formatEventDateTime, deadlineUrgency, isDeadlineAfterEvent } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
 import { buildShareUrl, openQrModal } from '../components/share.js';
 
@@ -334,6 +334,7 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
             <div class="stack-3">
               <label class="field-label" for="df-deadline">투표 마감 시각</label>
               <input type="datetime-local" id="df-deadline" class="input" />
+              <p class="field-warn" id="df-deadline-warn" hidden>마감 시각은 행사 시작 시각보다 빨라야 합니다.</p>
             </div>
           </section>
 
@@ -419,6 +420,24 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
   };
   prefillForm(form, poll);
 
+  const dfDeadlineWarn = mount.querySelector('#df-deadline-warn');
+  function syncDeadlineWarn() {
+    const bad = isDeadlineAfterEvent(
+      form.deadline.value,
+      form.eventDate.value,
+      form.eventTime.value
+    );
+    dfDeadlineWarn.hidden = !bad;
+    form.deadline.classList.toggle('has-warn', bad);
+    return bad;
+  }
+  ['change', 'input'].forEach((ev) => {
+    form.eventDate.addEventListener(ev, syncDeadlineWarn);
+    form.eventTime.addEventListener(ev, syncDeadlineWarn);
+    form.deadline.addEventListener(ev, syncDeadlineWarn);
+  });
+  syncDeadlineWarn();
+
   if (readonly) {
     [form.title, form.mealType, form.eventDate, form.eventTime, form.deadline, form.description]
       .forEach((el) => el.setAttribute('disabled', 'disabled'));
@@ -487,6 +506,13 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
         showToast('마감 시각이 올바르지 않습니다', { error: true });
         return;
       }
+    }
+    // 마감 시각이 행사 시작보다 늦으면 차단 (날짜만/마감만 바뀐 경우도 잡으려 폼값으로 비교)
+    if (isDeadlineAfterEvent(form.deadline.value, form.eventDate.value, form.eventTime.value)) {
+      syncDeadlineWarn();
+      showToast('마감 시각은 행사 시작 전이어야 합니다', { error: true });
+      form.deadline.focus();
+      return;
     }
     if (patch.restaurantIds !== undefined && patch.restaurantIds.length < 2) {
       showToast('식당은 2개 이상 선택해야 합니다', { error: true });
@@ -819,6 +845,7 @@ async function renderForm(mount, shellRoot) {
             <label class="field-label" for="nf-deadline">투표 마감 시각</label>
             <input type="datetime-local" id="nf-deadline" class="input" />
             <p class="field-error" id="nf-deadline-error" hidden>마감 시각을 선택해주세요.</p>
+            <p class="field-warn" id="nf-deadline-warn" hidden>마감 시각은 행사 시작 시각보다 빨라야 합니다.</p>
           </div>
         </section>
 
@@ -869,6 +896,23 @@ async function renderForm(mount, shellRoot) {
       el.classList.remove('has-error');
       if (errors[key]) errors[key].hidden = true;
     });
+  });
+
+  const deadlineWarn = mount.querySelector('#nf-deadline-warn');
+  function syncDeadlineWarn() {
+    const bad = isDeadlineAfterEvent(
+      fields.deadline.value,
+      fields.eventDate.value,
+      fields.eventTime.value
+    );
+    deadlineWarn.hidden = !bad;
+    fields.deadline.classList.toggle('has-warn', bad);
+    return bad;
+  }
+  ['change', 'input'].forEach((ev) => {
+    fields.eventDate.addEventListener(ev, syncDeadlineWarn);
+    fields.eventTime.addEventListener(ev, syncDeadlineWarn);
+    fields.deadline.addEventListener(ev, syncDeadlineWarn);
   });
 
   const picker = mountRestaurantPicker(
@@ -925,8 +969,8 @@ async function renderForm(mount, shellRoot) {
       fields.deadline.focus();
       return;
     }
-    const eventDateTime = new Date(`${eventDate}T${eventTime}:00`);
-    if (!isNaN(eventDateTime.getTime()) && deadlineDate.getTime() > eventDateTime.getTime()) {
+    if (isDeadlineAfterEvent(deadlineRaw, eventDate, eventTime)) {
+      syncDeadlineWarn();
       showToast('마감 시각은 행사 시작 전이어야 합니다', { error: true });
       fields.deadline.focus();
       return;

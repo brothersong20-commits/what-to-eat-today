@@ -339,6 +339,16 @@ textarea {
   margin-top: var(--space-1);
 }
 
+.field-warn {
+  font-size: 1.3rem;
+  color: var(--badge-warn-fg);
+  margin-top: var(--space-1);
+}
+.input.has-warn {
+  border-color: var(--badge-warn-fg);
+  background: var(--badge-warn-bg);
+}
+
 .input-wrap {
   position: relative;
 }

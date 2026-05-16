@@ -23,6 +23,23 @@ export function isPastDeadline(deadlineText, now = new Date()) {
 }
 
 /**
+ * 투표 마감 시각이 행사 시작(날짜+시간)보다 늦은지 검사.
+ * deadlineText: "YYYY-MM-DD HH:mm" 또는 "YYYY-MM-DDTHH:mm"
+ * eventDate: "YYYY-MM-DD", eventTime: "HH:mm"
+ * 비교 불가(행사 날짜·시간 누락/무효, 마감 무효)면 false → 경고하지 않음.
+ */
+export function isDeadlineAfterEvent(deadlineText, eventDate, eventTime) {
+  const dl = parseDeadline(deadlineText);
+  if (!dl) return false;
+  const d = (eventDate || '').trim();
+  const t = (eventTime || '').trim();
+  if (!d || !t) return false;
+  const ev = new Date(`${d}T${t}:00`);
+  if (isNaN(ev.getTime())) return false;
+  return dl.getTime() > ev.getTime();
+}
+
+/**
  * 마감까지 남은 시간을 사람이 읽을 수 있는 형식으로.
  * 음수면 "마감됨" 반환.
  */
