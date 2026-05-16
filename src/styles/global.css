@@ -371,6 +371,85 @@ textarea {
   background: var(--danger);
 }
 
+/* ───── QR share modal ───── */
+.qr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity var(--duration) var(--ease);
+  z-index: 900;
+}
+.qr-modal-overlay.is-visible {
+  opacity: 1;
+}
+.qr-modal-card {
+  position: relative;
+  width: min(90vw, 36rem);
+  max-height: 90vh;
+  overflow: auto;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  background: var(--surface-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+  transform: scale(0.96);
+  transition: transform var(--duration) var(--ease);
+}
+.qr-modal-overlay.is-visible .qr-modal-card {
+  transform: scale(1);
+}
+.qr-modal-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 3.2rem;
+  height: 3.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 1.8rem;
+  line-height: 1;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--duration) var(--ease);
+}
+.qr-modal-close:hover {
+  background: var(--canvas-2);
+}
+.qr-modal-title {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.qr-modal-svg {
+  width: min(72vw, 28rem);
+  margin: 0 auto;
+  padding: var(--space-3);
+  background: #fff;
+  border-radius: var(--radius-input);
+}
+.qr-modal-svg svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.qr-modal-url {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-soft);
+  word-break: break-all;
+}
+
 /* ───── Active poll list (home) ───── */
 .poll-list {
   display: flex;
@@ -785,6 +864,7 @@ textarea {
 
 /* ───── Vote page ───── */
 .vote-header {
+  position: relative;
   background: var(--green-house);
   color: var(--text-on-dark);
   border-radius: var(--radius-card);
@@ -792,6 +872,18 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+.vote-header .share-controls {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  margin: 0;
+}
+@media (max-width: 480px) {
+  .vote-header .share-controls {
+    position: static;
+    margin-top: var(--space-1);
+  }
 }
 .vote-header h1,
 .vote-header h2 {

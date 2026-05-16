@@ -7,6 +7,7 @@ import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-
 import { showToast } from '../lib/toast.js';
 import { navigate } from '../lib/router.js';
 import { hasVoted, getVotedRecord, markVoted } from '../lib/voter.js';
+import { shareControlsHtml, bindShareControls } from '../components/share.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -87,10 +88,12 @@ export async function renderVote(app, { id: pollId }) {
           <button class="btn btn-primary" id="see-result">현재 투표 현황 보기</button>
           <button class="btn btn-outline" id="revote">다시 투표하기</button>
         </div>
+        ${shareControlsHtml()}
       </section>
     `;
     root.querySelector('#see-result').addEventListener('click', () => navigate(`/result/${poll.id}`));
     root.querySelector('#revote').addEventListener('click', () => renderForm({ prefillName: rec.name }));
+    bindShareControls(root, { pollId: poll.id, title: poll.title });
   }
 
   function renderForm({ prefillName = '' } = {}) {
@@ -115,6 +118,7 @@ export async function renderVote(app, { id: pollId }) {
         ${flipClockHtml({ parts: clockParts(poll.deadline), size: 'lg' })}
       </div>
       ${poll.description ? `<p>${escapeHtml(poll.description)}</p>` : ''}
+      ${shareControlsHtml()}
     </section>
 
     <section class="card stack-4" style="margin-top: var(--space-3);">
@@ -164,6 +168,8 @@ export async function renderVote(app, { id: pollId }) {
       <button class="btn btn-primary btn-block" id="submit-btn">투표 제출</button>
     </div>
   `;
+
+  bindShareControls(root, { pollId: poll.id, title: poll.title });
 
   // ─── countdown ─────────────────────────────────────────
   const countdownEl = root.querySelector('#countdown');
@@ -331,9 +337,11 @@ function renderSuccess(root, poll, result, state) {
         <button class="btn btn-outline" id="redo">다시 투표</button>
         <button class="btn btn-outline" id="go-home">홈으로</button>
       </div>
+      ${shareControlsHtml()}
     </section>
   `;
   root.querySelector('#see-result').addEventListener('click', () => navigate(`/result/${poll.id}`));
   root.querySelector('#redo').addEventListener('click', () => location.reload());
   root.querySelector('#go-home').addEventListener('click', () => navigate('/'));
+  bindShareControls(root, { pollId: poll.id, title: poll.title });
 }

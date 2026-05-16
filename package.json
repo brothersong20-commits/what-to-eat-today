@@ -1,7 +1,7 @@
 {
   "name": "what-to-eat-today",
   "private": true,
-  "version": "2.8.0",
+  "version": "2.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.105.4"
+    "@supabase/supabase-js": "^2.105.4",
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
     "vite": "^5.4.10"

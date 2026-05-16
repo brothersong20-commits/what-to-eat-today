@@ -6,6 +6,7 @@ import { showToast } from '../lib/toast.js';
 import { tally } from '../lib/tally.js';
 import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
+import { buildShareUrl, openQrModal } from '../components/share.js';
 
 const STORAGE_KEY = 'wte_admin_key';
 
@@ -251,7 +252,7 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
 
   const closed = poll.status === 'closed' || isPastDeadline(poll.deadline);
   const readonly = closed; // 마감 후엔 폼 잠금, 상태 토글만 활성
-  const shareUrl = `${location.href.split('#')[0]}#/vote/${poll.id}`;
+  const shareUrl = buildShareUrl(poll.id);
 
   mount.innerHTML = `
     <div class="detail-toolbar">
@@ -259,6 +260,7 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
       <div class="row-2">
         <input type="text" id="detail-share-url" class="input detail-share-input" readonly value="${escapeHtml(shareUrl)}" />
         <button type="button" class="btn btn-outline" id="detail-copy-url">링크 복사</button>
+        <button type="button" class="btn btn-outline" id="detail-qr">QR 코드</button>
       </div>
     </div>
 
@@ -349,6 +351,10 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
       try { document.execCommand('copy'); showToast('링크가 복사되었어요'); }
       catch { showToast('복사에 실패했어요. 직접 복사해주세요', { error: true }); }
     }
+  });
+
+  mount.querySelector('#detail-qr').addEventListener('click', () => {
+    openQrModal({ url: shareUrl, title: poll.title });
   });
 
   // 폼 prefill (마운트 시 1회만 — 폴링이 덮어쓰지 않음)
