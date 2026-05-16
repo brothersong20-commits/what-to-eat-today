@@ -8,6 +8,7 @@ import { showToast } from '../lib/toast.js';
 import { navigate } from '../lib/router.js';
 import { hasVoted, getVotedRecord, markVoted } from '../lib/voter.js';
 import { shareControlsHtml, bindShareControls } from '../components/share.js';
+import { spinWheelButtonHtml, bindSpinWheel } from '../components/spin-wheel.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -160,6 +161,7 @@ export async function renderVote(app, { id: pollId }) {
         <p class="text-soft fs-small">1순위와 2순위를 골라주세요. (서로 다른 식당)</p>
       </div>
       <div id="vote-filter-mount"></div>
+      ${spinWheelButtonHtml()}
       <p class="text-soft fs-small" id="choice-summary"></p>
       <div id="vote-list" class="restaurant-grid"></div>
     </section>
@@ -279,6 +281,28 @@ export async function renderVote(app, { id: pollId }) {
 
   renderList();
   renderChoiceSummary();
+
+  // ─── spin wheel (회전 돌림판) ─────────────────────────
+  bindSpinWheel(root, {
+    restaurants,
+    onPick: (restaurantId, rank) => {
+      if (rank === 2) {
+        if (state.choice1Id === restaurantId) {
+          showToast('1순위와 다른 식당을 골라주세요', { error: true });
+          return false;
+        }
+        state.choice2Id = restaurantId;
+      } else {
+        state.choice1Id = restaurantId;
+        if (state.choice2Id === restaurantId) state.choice2Id = '';
+      }
+      renderList();
+      renderChoiceSummary();
+      const picked = restaurants.find((r) => r.id === restaurantId);
+      showToast(`${picked ? picked.name : '식당'} 을(를) ${rank}순위로 넣었어요`);
+      return true;
+    }
+  });
 
   // ─── submit ───────────────────────────────────────────
   const submitBtn = root.querySelector('#submit-btn');
