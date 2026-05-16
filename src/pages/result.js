@@ -1,8 +1,9 @@
-import { loadPoll, loadRestaurants, loadVotes } from '../lib/supabase.js';
+import { loadPoll, loadRestaurants, loadVotes, subscribeVotes, unsubscribe } from '../lib/supabase.js';
 import { tally } from '../lib/tally.js';
 import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
 import { navigate } from '../lib/router.js';
+import { hasVoted } from '../lib/voter.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -10,97 +11,9 @@ function escapeHtml(s) {
   }[c]));
 }
 
-export async function renderResult(app, { id: pollId }) {
-  app.innerHTML = `
-    <header class="site-header">
-      <div>
-        <h1 class="site-title">오늘뭐먹지?</h1>
-      </div>
-      <nav class="site-nav">
-        <a href="#/">식당 보기</a>
-      </nav>
-    </header>
-    <div id="result-root">
-      <div class="state"><p>결과를 불러오는 중...</p></div>
-    </div>
-  `;
-
-  const root = app.querySelector('#result-root');
-
-  let poll, restaurants, votes;
-  try {
-    [poll, restaurants] = await Promise.all([loadPoll(pollId), loadRestaurants()]);
-  } catch (err) {
-    root.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
-    return;
-  }
-
-  if (!poll) {
-    root.innerHTML = `<div class="state state-error"><p>존재하지 않는 투표입니다.</p></div>`;
-    return;
-  }
-
-  const closed = poll.status === 'closed' || isPastDeadline(poll.deadline);
-
-  // 마감 전: 카운트다운 안내만
-  if (!closed) {
-    root.innerHTML = `
-      <section class="vote-header">
-        <h2>${escapeHtml(poll.title)}</h2>
-        <div class="vote-meta">
-          <span>📅 ${escapeHtml(formatEventDateTime(poll.eventDate, poll.eventTime))}</span>
-        </div>
-        <div class="vote-countdown" id="countdown">마감까지: 계산 중...</div>
-      </section>
-      <section class="card stack-3" style="margin-top: var(--space-3); text-align: center;">
-        <div style="font-size: 4rem;">🗳️</div>
-        <h3>아직 진행 중인 투표예요</h3>
-        <p class="text-soft">결과는 마감 시각 이후에 공개됩니다.</p>
-        <div class="row-2" style="justify-content: center;">
-          <button class="btn btn-primary" id="go-vote">투표하러 가기</button>
-        </div>
-      </section>
-    `;
-    root.querySelector('#go-vote').addEventListener('click', () => navigate(`/vote/${poll.id}`));
-
-    const countdownEl = root.querySelector('#countdown');
-    const tick = () => {
-      if (isPastDeadline(poll.deadline)) {
-        location.reload();
-        return;
-      }
-      countdownEl.textContent = `⏰ 마감까지: ${formatRemaining(poll.deadline)}`;
-    };
-    tick();
-    const handle = setInterval(tick, 1000);
-    window.addEventListener('hashchange', () => clearInterval(handle), { once: true });
-    return;
-  }
-
-  // 마감 후: 결과 표시
-  try {
-    votes = await loadVotes(poll.id);
-  } catch (err) {
-    root.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
-    return;
-  }
-
-  // 폴이 후보 식당을 명시했으면 그 셋으로 좁힘. 취소된 식당은 일반 사용자 결과에서 제외.
-  const candidate = poll.restaurantIds && poll.restaurantIds.length > 0
-    ? restaurants.filter((r) => poll.restaurantIds.includes(r.id))
-    : restaurants;
-
-  const result = tally(votes, candidate);
-
-  root.innerHTML = `
-    <section class="vote-header">
-      <h2>${escapeHtml(poll.title)}</h2>
-      <div class="vote-meta">
-        <span>📅 ${escapeHtml(formatEventDateTime(poll.eventDate, poll.eventTime))}</span>
-        <span>마감됨</span>
-      </div>
-    </section>
-
+// 실시간 재렌더 시 이 부분만 교체된다 — 헤더/버튼은 바깥에 두어 바인딩을 유지한다.
+function tallyBodyHtml(result) {
+  return `
     <section class="stack-4" style="margin-top: var(--space-3);">
       <div>
         <h2>참석 현황</h2>
@@ -156,4 +69,167 @@ export async function renderResult(app, { id: pollId }) {
       }
     </section>
   `;
+}
+
+function renderTallyView(root, poll, candidate, votes, { live }) {
+  const result = tally(votes, candidate);
+  root.innerHTML = `
+    <section class="vote-header">
+      <h2>${escapeHtml(poll.title)}</h2>
+      <div class="vote-meta">
+        <span>📅 ${escapeHtml(formatEventDateTime(poll.eventDate, poll.eventTime))}</span>
+        <span>${live ? '🟢 진행 중 · 실시간 현황' : '마감됨'}</span>
+      </div>
+    </section>
+    <div id="tally-body">${tallyBodyHtml(result)}</div>
+    ${
+      live
+        ? `<div class="row-2" style="justify-content: center; margin-top: var(--space-4);">
+            <button class="btn btn-outline" id="go-vote-again">다시 투표하기</button>
+          </div>`
+        : ''
+    }
+  `;
+  if (live) {
+    const btn = root.querySelector('#go-vote-again');
+    if (btn) btn.addEventListener('click', () => navigate(`/vote/${poll.id}`));
+  }
+}
+
+export async function renderResult(app, { id: pollId }) {
+  app.innerHTML = `
+    <header class="site-header">
+      <div>
+        <h1 class="site-title">오늘뭐먹지?</h1>
+      </div>
+      <nav class="site-nav">
+        <a href="#/">식당 보기</a>
+      </nav>
+    </header>
+    <div id="result-root">
+      <div class="state"><p>결과를 불러오는 중...</p></div>
+    </div>
+  `;
+
+  const root = app.querySelector('#result-root');
+
+  let poll, restaurants;
+  try {
+    [poll, restaurants] = await Promise.all([loadPoll(pollId), loadRestaurants()]);
+  } catch (err) {
+    root.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
+    return;
+  }
+
+  if (!poll) {
+    root.innerHTML = `<div class="state state-error"><p>존재하지 않는 투표입니다.</p></div>`;
+    return;
+  }
+
+  // 폴이 후보 식당을 명시했으면 그 셋으로 좁힘. 취소된 식당은 일반 사용자 결과에서 제외.
+  const candidate = poll.restaurantIds && poll.restaurantIds.length > 0
+    ? restaurants.filter((r) => poll.restaurantIds.includes(r.id))
+    : restaurants;
+
+  const closed = poll.status === 'closed' || isPastDeadline(poll.deadline);
+
+  // ────── 마감 전 ──────
+  if (!closed) {
+    // 투표하지 않은 사람: 결과를 가리고 안내만 (기존 동작 유지)
+    if (!hasVoted(poll.id)) {
+      root.innerHTML = `
+        <section class="vote-header">
+          <h2>${escapeHtml(poll.title)}</h2>
+          <div class="vote-meta">
+            <span>📅 ${escapeHtml(formatEventDateTime(poll.eventDate, poll.eventTime))}</span>
+          </div>
+          <div class="vote-countdown" id="countdown">마감까지: 계산 중...</div>
+        </section>
+        <section class="card stack-3" style="margin-top: var(--space-3); text-align: center;">
+          <div style="font-size: 4rem;">🗳️</div>
+          <h3>아직 진행 중인 투표예요</h3>
+          <p class="text-soft">투표하면 진행 중인 실시간 현황을 볼 수 있어요.</p>
+          <div class="row-2" style="justify-content: center;">
+            <button class="btn btn-primary" id="go-vote">투표하러 가기</button>
+          </div>
+        </section>
+      `;
+      root.querySelector('#go-vote').addEventListener('click', () => navigate(`/vote/${poll.id}`));
+
+      const countdownEl = root.querySelector('#countdown');
+      const tick = () => {
+        if (isPastDeadline(poll.deadline)) {
+          location.reload();
+          return;
+        }
+        countdownEl.textContent = `⏰ 마감까지: ${formatRemaining(poll.deadline)}`;
+      };
+      tick();
+      const handle = setInterval(tick, 1000);
+      window.addEventListener('hashchange', () => clearInterval(handle), { once: true });
+      return;
+    }
+
+    // 투표한 사람: 실시간 현황
+    let votes;
+    try {
+      votes = await loadVotes(poll.id);
+    } catch (err) {
+      root.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
+      return;
+    }
+    renderTallyView(root, poll, candidate, votes, { live: true });
+
+    let channel = null;
+    let pollTick = null;
+    let reloading = false;
+    let disposed = false;
+
+    function dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (channel) { unsubscribe(channel); channel = null; }
+      if (pollTick) { clearInterval(pollTick); pollTick = null; }
+    }
+    window.addEventListener('hashchange', dispose, { once: true });
+
+    // 표가 바뀔 때마다 #tally-body 만 다시 그린다. reloading 가드로 동시 투표 버스트를
+    // 합치고, 처리 후 도착하는 다음 이벤트로 최종 상태에 수렴한다.
+    async function refresh() {
+      if (disposed || reloading) return;
+      reloading = true;
+      try {
+        const fresh = await loadVotes(poll.id);
+        if (disposed) return;
+        const bodyEl = root.querySelector('#tally-body');
+        if (!bodyEl) return;
+        bodyEl.innerHTML = tallyBodyHtml(tally(fresh, candidate));
+      } catch {
+        /* 일시 오류 — 다음 이벤트에서 재시도 */
+      } finally {
+        reloading = false;
+      }
+    }
+
+    channel = subscribeVotes(poll.id, () => { refresh(); });
+
+    pollTick = setInterval(() => {
+      if (disposed) return;
+      if (isPastDeadline(poll.deadline)) {
+        dispose();
+        location.reload();
+      }
+    }, 1000);
+    return;
+  }
+
+  // ────── 마감 후 ──────
+  let votes;
+  try {
+    votes = await loadVotes(poll.id);
+  } catch (err) {
+    root.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
+    return;
+  }
+  renderTallyView(root, poll, candidate, votes, { live: false });
 }

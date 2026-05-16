@@ -6,6 +6,7 @@ import { flipClockHtml, updateFlipClock } from '../components/flip-clock.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
 import { navigate } from '../lib/router.js';
+import { hasVoted, getVotedRecord, markVoted } from '../lib/voter.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -64,6 +65,35 @@ export async function renderVote(app, { id: pollId }) {
     return;
   }
 
+  if (hasVoted(poll.id)) {
+    renderVotedSummary();
+  } else {
+    renderForm();
+  }
+  return;
+
+  function renderVotedSummary() {
+    const rec = getVotedRecord(poll.id);
+    if (!rec) {
+      renderForm();
+      return;
+    }
+    root.innerHTML = `
+      <section class="card stack-3">
+        <h2>이미 투표하셨습니다</h2>
+        <p class="text-soft">${escapeHtml(poll.title)}</p>
+        <p class="text-soft fs-small">이름: ${escapeHtml(rec.name)} · ${escapeHtml(rec.attendance)}</p>
+        <div class="row-2">
+          <button class="btn btn-primary" id="see-result">현재 투표 현황 보기</button>
+          <button class="btn btn-outline" id="revote">다시 투표하기</button>
+        </div>
+      </section>
+    `;
+    root.querySelector('#see-result').addEventListener('click', () => navigate(`/result/${poll.id}`));
+    root.querySelector('#revote').addEventListener('click', () => renderForm({ prefillName: rec.name }));
+  }
+
+  function renderForm({ prefillName = '' } = {}) {
   // ────── 정상 렌더 ──────
   const state = {
     voterName: '',
@@ -152,6 +182,10 @@ export async function renderVote(app, { id: pollId }) {
   // ─── name ─────────────────────────────────────────────
   const nameInput = root.querySelector('#voter-name');
   const nameError = root.querySelector('#voter-name-error');
+  if (prefillName) {
+    nameInput.value = prefillName;
+    state.voterName = prefillName;
+  }
   nameInput.addEventListener('input', () => {
     state.voterName = nameInput.value.trim();
     if (state.voterName) {
@@ -272,6 +306,7 @@ export async function renderVote(app, { id: pollId }) {
         choice1Id: state.choice1Id,
         choice2Id: state.choice2Id
       });
+      markVoted(poll.id, { name: state.voterName, attendance: state.attendance });
       renderSuccess(root, poll, result, state);
     } catch (err) {
       showToast(err.message || '제출에 실패했습니다', { error: true });
@@ -280,6 +315,7 @@ export async function renderVote(app, { id: pollId }) {
       state.submitting = false;
     }
   });
+  }
 }
 
 function renderSuccess(root, poll, result, state) {
@@ -291,11 +327,13 @@ function renderSuccess(root, poll, result, state) {
       <p class="text-soft">${escapeHtml(poll.title)}</p>
       <p class="text-soft fs-small">이름: ${escapeHtml(state.voterName)} / ${escapeHtml(state.attendance)}</p>
       <div class="row-2" style="justify-content: center; flex-wrap: wrap;">
+        <button class="btn btn-primary" id="see-result">현재 투표 현황 보기</button>
         <button class="btn btn-outline" id="redo">다시 투표</button>
-        <button class="btn btn-primary" id="go-home">홈으로</button>
+        <button class="btn btn-outline" id="go-home">홈으로</button>
       </div>
     </section>
   `;
+  root.querySelector('#see-result').addEventListener('click', () => navigate(`/result/${poll.id}`));
   root.querySelector('#redo').addEventListener('click', () => location.reload());
   root.querySelector('#go-home').addEventListener('click', () => navigate('/'));
 }
