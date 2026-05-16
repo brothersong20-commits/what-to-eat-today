@@ -1,7 +1,7 @@
 {
   "name": "what-to-eat-today",
   "private": true,
-  "version": "2.14.0",
+  "version": "2.15.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,6 @@
     "spin-wheel": "^5.0.2"
   },
   "devDependencies": {
-    "vite": "^5.4.10"
+    "vite": "^8.0.13"
   }
 }
