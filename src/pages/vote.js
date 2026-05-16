@@ -9,6 +9,7 @@ import { navigate } from '../lib/router.js';
 import { hasVoted, getVotedRecord, markVoted } from '../lib/voter.js';
 import { shareControlsHtml, bindShareControls } from '../components/share.js';
 import { spinWheelButtonHtml, bindSpinWheel } from '../components/spin-wheel.js';
+import { shuffle } from '../lib/shuffle.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -41,6 +42,7 @@ export async function renderVote(app, { id: pollId }) {
     restaurants = poll && poll.restaurantIds && poll.restaurantIds.length > 0
       ? allRestaurants.filter((r) => poll.restaurantIds.includes(r.id))
       : allRestaurants;
+    restaurants = shuffle(restaurants);
   } catch (err) {
     root.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
     return;

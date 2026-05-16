@@ -9,6 +9,7 @@ import {
 import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { flipClockHtml, updateFlipClock } from '../components/flip-clock.js';
+import { shuffle } from '../lib/shuffle.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -188,6 +189,7 @@ export async function renderHome(app) {
       cafeListEl.innerHTML = filtered.map((c) => restaurantCardHtml(c, { mode: 'view' })).join('');
     }
 
+    cafes = shuffle(cafes);
     bindFilterBar(cafeFilterMount, cafeFilterState, renderCafes);
     renderCafes();
   })();
@@ -233,6 +235,7 @@ export async function renderHome(app) {
       listEl.innerHTML = filtered.map((r) => restaurantCardHtml(r, { mode: 'view' })).join('');
     }
 
+    restaurants = shuffle(restaurants);
     bindFilterBar(filterMount, filterState, render);
     render();
   })();
