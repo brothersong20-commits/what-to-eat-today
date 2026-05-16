@@ -136,6 +136,7 @@ export async function renderResult(app, { id: pollId }) {
                   (item, idx) => `
                 <li class="ranking-item ${idx === 0 ? 'is-winner' : ''}">
                   <div class="ranking-rank">${idx === 0 ? '🏆' : `#${idx + 1}`}</div>
+                  ${item.restaurant.imageUrl ? `<img class="ranking-thumb" src="${escapeHtml(item.restaurant.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />` : ''}
                   <div>
                     <div class="ranking-name">${escapeHtml(item.restaurant.name)}</div>
                     <div class="ranking-meta">

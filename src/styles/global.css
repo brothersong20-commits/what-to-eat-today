@@ -575,6 +575,54 @@ textarea {
   flex-direction: column;
   gap: var(--space-2);
 }
+
+/* 식당 썸네일 — 카드 상단 커버 / 관리자 행 / 결과 랭킹 / 폼 미리보기 */
+.rc-thumb {
+  width: 100%;
+  height: 16rem;
+  object-fit: cover;
+  border-radius: var(--radius-input);
+  display: block;
+}
+.rest-thumb {
+  width: 3.2rem;
+  height: 3.2rem;
+  object-fit: cover;
+  border-radius: var(--radius-input);
+  flex-shrink: 0;
+}
+.ranking-thumb {
+  width: 4rem;
+  height: 4rem;
+  object-fit: cover;
+  border-radius: var(--radius-input);
+}
+.ranking-item:has(.ranking-thumb) {
+  grid-template-columns: auto auto 1fr auto;
+}
+.rf-image-preview {
+  width: 100%;
+  max-width: 24rem;
+  height: 14rem;
+  object-fit: cover;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--border-soft);
+}
+
+/* 식당 폼 섹션 그룹 */
+.rf-section {
+  padding: var(--space-3);
+  background: var(--surface-cool);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+}
+.rf-section-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.325px;
+  color: var(--text-soft);
+}
 .rc-header {
   display: flex;
   flex-direction: column;

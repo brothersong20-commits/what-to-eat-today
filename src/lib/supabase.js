@@ -30,6 +30,7 @@ function mapRestaurant(r) {
     category: r.category || '',
     address: r.address || '',
     naverUrl: r.naver_url || '',
+    imageUrl: r.image_url || '',
     walkingMinutes: r.walking_minutes,
     capacityRoom: r.capacity_room ?? null,
     capacityHall: r.capacity_hall ?? null,
@@ -173,7 +174,7 @@ export async function updatePoll({ adminKey, pollId, patch }) {
 // ─────────────────────────────────────────────────────────
 // 식당 CRUD (관리자)
 // ─────────────────────────────────────────────────────────
-export async function createRestaurant({ adminKey, id, name, category, address, naverUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, active }) {
+export async function createRestaurant({ adminKey, id, name, category, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, active }) {
   const { data, error } = await supabase.rpc('create_restaurant', {
     p_admin_key: adminKey || '',
     p_id: id,
@@ -181,6 +182,7 @@ export async function createRestaurant({ adminKey, id, name, category, address, 
     p_category: category || null,
     p_address: address || null,
     p_naver_url: naverUrl || null,
+    p_image_url: imageUrl || null,
     p_walking_minutes: walkingMinutes ?? null,
     p_capacity_room: capacityRoom ?? null,
     p_capacity_hall: capacityHall ?? null,
@@ -200,6 +202,7 @@ export async function updateRestaurant({ adminKey, id, patch }) {
     p_category: null,
     p_address: null,
     p_naver_url: null,
+    p_image_url: null,
     p_walking_minutes: null,
     p_capacity_room: null,
     p_capacity_hall: null,
@@ -207,6 +210,7 @@ export async function updateRestaurant({ adminKey, id, patch }) {
     p_note: null,
     p_active: null,
     p_clear_naver_url: false,
+    p_clear_image_url: false,
     p_clear_capacity_room: false,
     p_clear_capacity_hall: false
   };
@@ -217,6 +221,10 @@ export async function updateRestaurant({ adminKey, id, patch }) {
   if (p.naverUrl !== undefined) {
     if (p.naverUrl === '') params.p_clear_naver_url = true;
     else params.p_naver_url = p.naverUrl;
+  }
+  if (p.imageUrl !== undefined) {
+    if (p.imageUrl === '') params.p_clear_image_url = true;
+    else params.p_image_url = p.imageUrl;
   }
   if (p.walkingMinutes !== undefined) params.p_walking_minutes = p.walkingMinutes;
   if (p.capacityRoom !== undefined) {

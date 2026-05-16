@@ -27,20 +27,16 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
     )
     .join('');
 
-  const capacityText = [
-    r.capacityRoom != null && `룸 ${r.capacityRoom}명`,
-    r.capacityHall != null && `홀 ${r.capacityHall}명`
-  ]
-    .filter(Boolean)
-    .join(' · ');
-
   const meta = [
     r.category && `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>`,
-    r.walkingMinutes != null && `<span class="rc-meta">🚶 도보 ${r.walkingMinutes}분</span>`,
-    capacityText && `<span class="rc-meta">🪑 ${escapeHtml(capacityText)}</span>`
+    r.walkingMinutes != null && `<span class="rc-meta">🚶 도보 ${r.walkingMinutes}분</span>`
   ]
     .filter(Boolean)
     .join('');
+
+  const thumb = r.imageUrl
+    ? `<img class="rc-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />`
+    : '';
 
   const noteRow = r.note
     ? `<p class="rc-note">📝 ${escapeHtml(r.note)}</p>`
@@ -71,6 +67,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
 
   return `
     <article class="restaurant-card" data-id="${escapeHtml(r.id)}">
+      ${thumb}
       <header class="rc-header">
         <h3 class="rc-name">${escapeHtml(r.name)}</h3>
         <div class="rc-meta-row">${meta}</div>

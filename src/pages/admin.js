@@ -1,5 +1,5 @@
 import { createPoll, updatePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive } from '../lib/supabase.js';
-import { CATEGORIES } from '../lib/config.js';
+import { CATEGORIES, categorySlug } from '../lib/config.js';
 import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
@@ -1016,6 +1016,19 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
     if (del) del.closest('.menu-edit-row').remove();
   });
 
+  // 썸네일 URL → 미리보기 라이브 갱신
+  const imageUrlInput = mount.querySelector('#rf-image-url');
+  const imagePreview = mount.querySelector('#rf-image-preview');
+  imageUrlInput?.addEventListener('input', () => {
+    const url = imageUrlInput.value.trim();
+    if (url) {
+      imagePreview.src = url;
+      imagePreview.hidden = false;
+    } else {
+      imagePreview.hidden = true;
+    }
+  });
+
   mount.querySelector('#rf-save').addEventListener('click', async () => {
     const id = (mount.querySelector('#rf-id').value || '').trim();
     const name = (mount.querySelector('#rf-name').value || '').trim();
@@ -1025,12 +1038,9 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
         : categorySelect.value;
     const address = (mount.querySelector('#rf-address').value || '').trim();
     const naverUrl = (mount.querySelector('#rf-naver-url').value || '').trim();
+    const imageUrl = (mount.querySelector('#rf-image-url').value || '').trim();
     const walkingRaw = (mount.querySelector('#rf-walking').value || '').trim();
     const walkingMinutes = walkingRaw === '' ? null : Number(walkingRaw);
-    const roomRaw = (mount.querySelector('#rf-capacity-room').value || '').trim();
-    const hallRaw = (mount.querySelector('#rf-capacity-hall').value || '').trim();
-    const capacityRoom = roomRaw === '' ? null : Number(roomRaw);
-    const capacityHall = hallRaw === '' ? null : Number(hallRaw);
     const menuRows = [...mount.querySelectorAll('#rf-menu-rows .menu-edit-row')].map((row) => {
       const priceRaw = (row.querySelector('.me-price').value || '').trim();
       return {
@@ -1050,15 +1060,12 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
       showToast('네이버 링크는 http(s)://로 시작해야 합니다', { error: true });
       return;
     }
-    if (walkingMinutes !== null && (isNaN(walkingMinutes) || walkingMinutes < 0)) {
-      showToast('도보 시간은 0 이상의 숫자여야 합니다', { error: true });
+    if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
+      showToast('썸네일 이미지 URL은 http(s)://로 시작해야 합니다', { error: true });
       return;
     }
-    if (
-      (capacityRoom !== null && (isNaN(capacityRoom) || capacityRoom < 0)) ||
-      (capacityHall !== null && (isNaN(capacityHall) || capacityHall < 0))
-    ) {
-      showToast('수용 인원은 0 이상의 숫자여야 합니다', { error: true });
+    if (walkingMinutes !== null && (isNaN(walkingMinutes) || walkingMinutes < 0)) {
+      showToast('도보 시간은 0 이상의 숫자여야 합니다', { error: true });
       return;
     }
 
@@ -1067,14 +1074,14 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
         await updateRestaurant({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, address, naverUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note }
+          patch: { name, category, address, naverUrl, imageUrl, walkingMinutes, menusText, note }
         });
         showToast('수정되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createRestaurant({
           adminKey: getStoredKey(),
-          id, name, category, address, naverUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note
+          id, name, category, address, naverUrl, imageUrl, walkingMinutes, menusText, note
         });
         showToast('식당이 추가되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: id });
@@ -1088,8 +1095,9 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
 function restaurantRowHtml(r, isEditing) {
   return `
     <div class="rest-row ${isEditing ? 'is-editing' : ''} ${r.active ? '' : 'is-inactive'}" data-restaurant-id="${escapeHtml(r.id)}">
+      ${r.imageUrl ? `<img class="rest-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />` : ''}
       <span class="rest-id">${escapeHtml(r.id)}</span>
-      ${r.category ? `<span class="rc-badge">${escapeHtml(r.category)}</span>` : ''}
+      ${r.category ? `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>` : ''}
       <span class="rest-name">${escapeHtml(r.name)}</span>
       ${r.naverUrl ? `<a class="rest-naver" href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
       <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>
@@ -1102,71 +1110,73 @@ function restaurantFormHtml(r) {
   const selectedCategory = v.category || '';
   const isCustomCategory = selectedCategory && !CATEGORIES.includes(selectedCategory);
   return `
-    <form id="rest-form" class="stack-3" novalidate>
-      <div class="row-2" style="flex-wrap: wrap; gap: var(--space-3);">
-        <div class="stack-3" style="flex: 1; min-width: 12rem;">
-          <label class="field-label" for="rf-id">ID ${r ? '(수정 불가)' : ''}</label>
-          <input type="text" id="rf-id" class="input" value="${escapeHtml(v.id || '')}" ${r ? 'disabled' : ''} placeholder="R006" />
+    <form id="rest-form" class="stack-4" novalidate>
+      <section class="rf-section stack-3">
+        <h4 class="rf-section-title">기본 정보</h4>
+        <div class="row-2" style="flex-wrap: wrap; gap: var(--space-3);">
+          <div class="stack-3" style="flex: 1; min-width: 12rem;">
+            <label class="field-label" for="rf-id">ID ${r ? '(수정 불가)' : ''}</label>
+            <input type="text" id="rf-id" class="input" value="${escapeHtml(v.id || '')}" ${r ? 'disabled' : ''} placeholder="예: R006" />
+            ${r ? '' : `<p class="text-soft fs-small">짧고 고유한 식별자. 한 번 정하면 바꿀 수 없습니다.</p>`}
+          </div>
+          <div class="stack-3" style="flex: 2; min-width: 16rem;">
+            <label class="field-label" for="rf-name">이름 *</label>
+            <input type="text" id="rf-name" class="input" value="${escapeHtml(v.name || '')}" placeholder="예: 멘야하나비" />
+          </div>
         </div>
-        <div class="stack-3" style="flex: 2; min-width: 16rem;">
-          <label class="field-label" for="rf-name">이름</label>
-          <input type="text" id="rf-name" class="input" value="${escapeHtml(v.name || '')}" placeholder="예: 갈비집" />
+        <div class="row-2" style="flex-wrap: wrap; gap: var(--space-3);">
+          <div class="stack-3" style="flex: 1; min-width: 14rem;">
+            <label class="field-label" for="rf-category-select">카테고리</label>
+            <select id="rf-category-select" class="input">
+              <option value="">(없음)</option>
+              ${CATEGORIES.map((c) => `<option value="${escapeHtml(c)}" ${c === selectedCategory ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              <option value="__custom__" ${isCustomCategory ? 'selected' : ''}>+ 직접 입력</option>
+            </select>
+            <input type="text" id="rf-category-input" class="input" ${isCustomCategory ? '' : 'hidden'} value="${isCustomCategory ? escapeHtml(selectedCategory) : ''}" placeholder="예: 퓨전" />
+          </div>
+          <div class="stack-3" style="flex: 1; min-width: 12rem;">
+            <label class="field-label" for="rf-walking">도보 (분)</label>
+            <input type="number" id="rf-walking" class="input" min="0" value="${v.walkingMinutes != null ? v.walkingMinutes : ''}" placeholder="예: 5" />
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div class="row-2" style="flex-wrap: wrap; gap: var(--space-3);">
-        <div class="stack-3" style="flex: 1; min-width: 14rem;">
-          <label class="field-label" for="rf-category-select">카테고리</label>
-          <select id="rf-category-select" class="input">
-            <option value="">(없음)</option>
-            ${CATEGORIES.map((c) => `<option value="${escapeHtml(c)}" ${c === selectedCategory ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-            <option value="__custom__" ${isCustomCategory ? 'selected' : ''}>+ 직접 입력</option>
-          </select>
-          <input type="text" id="rf-category-input" class="input" ${isCustomCategory ? '' : 'hidden'} value="${isCustomCategory ? escapeHtml(selectedCategory) : ''}" placeholder="새 카테고리" />
+      <section class="rf-section stack-3">
+        <h4 class="rf-section-title">위치 · 이미지</h4>
+        <div class="stack-3">
+          <label class="field-label" for="rf-address">주소</label>
+          <input type="text" id="rf-address" class="input" value="${escapeHtml(v.address || '')}" placeholder="예: 강남구 테헤란로 123" />
         </div>
-        <div class="stack-3" style="flex: 1; min-width: 12rem;">
-          <label class="field-label" for="rf-walking">도보 (분)</label>
-          <input type="number" id="rf-walking" class="input" min="0" value="${v.walkingMinutes != null ? v.walkingMinutes : ''}" placeholder="5" />
+        <div class="stack-3">
+          <label class="field-label" for="rf-naver-url">네이버 지도 링크</label>
+          <input type="url" id="rf-naver-url" class="input" value="${escapeHtml(v.naverUrl || '')}" placeholder="예: https://naver.me/xxxxxxxx" />
         </div>
-      </div>
+        <div class="stack-3">
+          <label class="field-label" for="rf-image-url">썸네일 이미지 URL</label>
+          <input type="url" id="rf-image-url" class="input" value="${escapeHtml(v.imageUrl || '')}" placeholder="예: https://images.example.com/photo.jpg" />
+          <p class="text-soft fs-small">외부 이미지 링크를 붙여넣으면 식당 카드·목록에 썸네일로 표시됩니다.</p>
+          <img id="rf-image-preview" class="rf-image-preview" alt="썸네일 미리보기" src="${escapeHtml(v.imageUrl || '')}" ${v.imageUrl ? '' : 'hidden'} referrerpolicy="no-referrer" onerror="this.hidden = true" />
+        </div>
+      </section>
 
-      <div class="stack-3">
-        <label class="field-label" for="rf-address">주소</label>
-        <input type="text" id="rf-address" class="input" value="${escapeHtml(v.address || '')}" placeholder="강남구 테헤란로 123" />
-      </div>
-
-      <div class="stack-3">
-        <label class="field-label" for="rf-naver-url">네이버 지도 링크</label>
-        <input type="url" id="rf-naver-url" class="input" value="${escapeHtml(v.naverUrl || '')}" placeholder="https://naver.me/..." />
-      </div>
-
-      <div class="row-2" style="flex-wrap: wrap; gap: var(--space-3);">
-        <div class="stack-3" style="flex: 1; min-width: 12rem;">
-          <label class="field-label" for="rf-capacity-room">룸 수용 인원 (명)</label>
-          <input type="number" id="rf-capacity-room" class="input" min="0" value="${v.capacityRoom != null ? v.capacityRoom : ''}" placeholder="예: 12" />
+      <section class="rf-section stack-3">
+        <h4 class="rf-section-title">상세</h4>
+        <div class="stack-3">
+          <label class="field-label">메뉴</label>
+          <p class="text-soft fs-small">이름·가격을 각 칸에 입력. 대표 메뉴는 ⭐ 체크 (여러 개 가능).</p>
+          <div class="menu-edit-head">
+            <span>대표</span><span>이름</span><span>가격(원)</span><span></span>
+          </div>
+          <div id="rf-menu-rows" class="stack-2">
+            ${(v.menus && v.menus.length ? v.menus : [{}]).map((m) => menuRowHtml(m)).join('')}
+          </div>
+          <button type="button" class="btn btn-outline" id="rf-menu-add" style="align-self: flex-start;">+ 메뉴 행 추가</button>
         </div>
-        <div class="stack-3" style="flex: 1; min-width: 12rem;">
-          <label class="field-label" for="rf-capacity-hall">홀 수용 인원 (명)</label>
-          <input type="number" id="rf-capacity-hall" class="input" min="0" value="${v.capacityHall != null ? v.capacityHall : ''}" placeholder="예: 30" />
+        <div class="stack-3">
+          <label class="field-label" for="rf-note">메모</label>
+          <textarea id="rf-note" class="input" rows="2" maxlength="200" style="height: auto; padding: 1rem 1.4rem; resize: vertical;" placeholder="예: 주차 가능, 예약 필수">${escapeHtml(v.note || '')}</textarea>
         </div>
-      </div>
-
-      <div class="stack-3">
-        <label class="field-label">메뉴</label>
-        <p class="text-soft fs-small">이름·가격을 각 칸에 입력. 대표 메뉴는 ⭐ 체크 (여러 개 가능).</p>
-        <div class="menu-edit-head">
-          <span>대표</span><span>이름</span><span>가격(원)</span><span></span>
-        </div>
-        <div id="rf-menu-rows" class="stack-2">
-          ${(v.menus && v.menus.length ? v.menus : [{}]).map((m) => menuRowHtml(m)).join('')}
-        </div>
-        <button type="button" class="btn btn-outline" id="rf-menu-add" style="align-self: flex-start;">+ 메뉴 행 추가</button>
-      </div>
-
-      <div class="stack-3">
-        <label class="field-label" for="rf-note">메모</label>
-        <textarea id="rf-note" class="input" rows="2" maxlength="200" style="height: auto; padding: 1rem 1.4rem; resize: vertical;" placeholder="주차 가능, 예약 필수 등">${escapeHtml(v.note || '')}</textarea>
-      </div>
+      </section>
     </form>
   `;
 }

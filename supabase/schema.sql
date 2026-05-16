@@ -42,6 +42,7 @@ create table if not exists public.restaurants (
 alter table public.restaurants add column if not exists naver_url text;
 alter table public.restaurants add column if not exists capacity_room int;
 alter table public.restaurants add column if not exists capacity_hall int;
+alter table public.restaurants add column if not exists image_url text;
 
 create table if not exists public.polls (
   id                     text primary key,
@@ -306,6 +307,7 @@ create or replace function public.create_restaurant(
   p_category        text default null,
   p_address         text default null,
   p_naver_url       text default null,
+  p_image_url       text default null,
   p_walking_minutes int default null,
   p_capacity_room   int default null,
   p_capacity_hall   int default null,
@@ -332,12 +334,13 @@ begin
   end if;
 
   insert into public.restaurants (
-    id, name, category, address, naver_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, active
+    id, name, category, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, active
   ) values (
     btrim(p_id), btrim(p_name),
     nullif(btrim(coalesce(p_category, '')), ''),
     nullif(btrim(coalesce(p_address, '')), ''),
     nullif(btrim(coalesce(p_naver_url, '')), ''),
+    nullif(btrim(coalesce(p_image_url, '')), ''),
     p_walking_minutes,
     p_capacity_room,
     p_capacity_hall,
@@ -368,6 +371,7 @@ create or replace function public.update_restaurant(
   p_category             text default null,
   p_address              text default null,
   p_naver_url            text default null,
+  p_image_url            text default null,
   p_walking_minutes      int default null,
   p_capacity_room        int default null,
   p_capacity_hall        int default null,
@@ -375,6 +379,7 @@ create or replace function public.update_restaurant(
   p_note                 text default null,
   p_active               boolean default null,
   p_clear_naver_url      boolean default false,
+  p_clear_image_url      boolean default false,
   p_clear_capacity_room  boolean default false,
   p_clear_capacity_hall  boolean default false
 ) returns void
@@ -401,6 +406,11 @@ begin
                           when p_clear_naver_url then null
                           when p_naver_url is not null and btrim(p_naver_url) <> '' then btrim(p_naver_url)
                           else naver_url
+                        end,
+      image_url       = case
+                          when p_clear_image_url then null
+                          when p_image_url is not null and btrim(p_image_url) <> '' then btrim(p_image_url)
+                          else image_url
                         end,
       walking_minutes = coalesce(p_walking_minutes, walking_minutes),
       capacity_room   = case
@@ -501,7 +511,7 @@ end $$;
 grant execute on function public.submit_vote(text, text, text, text, text)                     to anon, authenticated;
 grant execute on function public.create_poll(text, text, text, date, time, timestamptz, text, text[])          to anon, authenticated;
 grant execute on function public.update_poll(text, text, text, text, date, time, timestamptz, text, boolean, text, text[]) to anon, authenticated;
-grant execute on function public.create_restaurant(text, text, text, text, text, text, int, int, int, text, text, boolean)     to anon, authenticated;
-grant execute on function public.update_restaurant(text, text, text, text, text, text, int, int, int, text, text, boolean, boolean, boolean, boolean) to anon, authenticated;
+grant execute on function public.create_restaurant(text, text, text, text, text, text, text, int, int, int, text, text, boolean)     to anon, authenticated;
+grant execute on function public.update_restaurant(text, text, text, text, text, text, text, int, int, int, text, text, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;
