@@ -1,5 +1,5 @@
 import { loadRestaurants, loadPolls, loadVotes } from '../lib/supabase.js';
-import { ATTENDANCE } from '../lib/config.js';
+import { ATTENDANCE, categorySlug } from '../lib/config.js';
 import {
   isPastDeadline,
   clockParts,
@@ -58,6 +58,8 @@ export async function renderHome(app) {
   const pollsSection = app.querySelector('#active-polls-section');
   const pollsListEl = app.querySelector('#active-polls-list');
 
+  const restaurantsPromise = loadRestaurants();
+
   loadPolls()
     .then(async (polls) => {
       const active = polls
@@ -65,6 +67,14 @@ export async function renderHome(app) {
           && (!isPastDeadline(p.deadline) || withinGracePeriod(p.deadline, 3)))
         .sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
       if (active.length === 0) return;
+
+      let restaurantsById = new Map();
+      try {
+        const rs = await restaurantsPromise;
+        restaurantsById = new Map(rs.map((r) => [r.id, r]));
+      } catch {
+        /* 식당 로드 실패 시 후보 칩만 생략, 폴 카드는 그대로 렌더 */
+      }
 
       const statsById = {};
       await Promise.all(active.map(async (p) => {
@@ -76,7 +86,9 @@ export async function renderHome(app) {
       }));
 
       pollsSection.hidden = false;
-      pollsListEl.innerHTML = active.map((p) => renderPollItem(p, statsById[p.id])).join('');
+      pollsListEl.innerHTML = active
+        .map((p) => renderPollItem(p, statsById[p.id], restaurantsById))
+        .join('');
 
       function tickPollCountdowns() {
         pollsListEl.querySelectorAll('.poll-item').forEach((card) => {
@@ -97,7 +109,7 @@ export async function renderHome(app) {
 
   let restaurants = [];
   try {
-    restaurants = await loadRestaurants();
+    restaurants = await restaurantsPromise;
   } catch (err) {
     listEl.innerHTML = `<div class="state state-error"><p>${err.message}</p></div>`;
     return;
@@ -138,24 +150,52 @@ function countAttendance(votes) {
   return c;
 }
 
-function renderPollItem(p, stats) {
+function renderPollItem(p, stats, restaurantsById) {
   const eventStr = formatEventDateTime(p.eventDate, p.eventTime);
   const expired = isPastDeadline(p.deadline);
   const statsHtml = stats
     ? `<div class="poll-item-substats">참석 ${stats.yes} · 불참 ${stats.no} (총 ${stats.total})</div>`
     : '';
+
+  const candidates = (p.restaurantIds || [])
+    .map((id) => restaurantsById && restaurantsById.get(id))
+    .filter(Boolean);
+  const asideHtml = candidates.length
+    ? `<div class="poll-item-aside">
+        <div class="poll-item-aside-title">후보 식당 ${candidates.length}곳</div>
+        <ul class="poll-cand-list">
+          ${candidates
+            .map(
+              (r) =>
+                `<li class="poll-cand">
+                  ${
+                    r.category
+                      ? `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>`
+                      : ''
+                  }
+                  <span class="poll-cand-name">${escapeHtml(r.name)}</span>
+                </li>`
+            )
+            .join('')}
+        </ul>
+      </div>`
+    : '';
+
   return `
     <a class="poll-item poll-item--countdown ${expired ? 'is-expired' : ''}"
        href="#/vote/${encodeURIComponent(p.id)}"
        data-deadline="${escapeHtml(p.deadline || '')}">
-      <div class="poll-item-title">${escapeHtml(p.title)}</div>
-      <div class="poll-item-meta">
-        ${p.mealType ? `<span class="poll-item-meal">${escapeHtml(p.mealType)}</span>` : ''}
-        ${eventStr ? `<span class="poll-item-date">${escapeHtml(eventStr)}</span>` : ''}
+      <div class="poll-item-main">
+        <div class="poll-item-title">${escapeHtml(p.title)}</div>
+        <div class="poll-item-meta">
+          ${p.mealType ? `<span class="poll-item-meal">${escapeHtml(p.mealType)}</span>` : ''}
+          ${eventStr ? `<span class="poll-item-date">${escapeHtml(eventStr)}</span>` : ''}
+        </div>
+        ${statsHtml}
+        ${flipClockHtml({ parts: clockParts(p.deadline), size: 'md', label: '마감까지' })}
+        <span class="poll-item-cta">투표하러 가기</span>
       </div>
-      ${statsHtml}
-      ${flipClockHtml({ parts: clockParts(p.deadline), size: 'md', label: '마감까지' })}
-      <span class="poll-item-cta">투표하러 가기</span>
+      ${asideHtml}
     </a>
   `;
 }

@@ -496,6 +496,59 @@ textarea {
   align-self: flex-start;
 }
 
+/* 좌(메인)/우(후보 식당 칩) 2단 — 모바일은 세로 스택 */
+.poll-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.poll-item-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.poll-item-aside-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-on-dark-soft);
+}
+.poll-cand-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.poll-cand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.poll-cand .rc-badge {
+  flex: none;
+}
+.poll-cand-name {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-on-dark);
+}
+@media (min-width: 768px) {
+  .poll-item--countdown {
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+  .poll-item-main {
+    flex: 1 1 0;
+  }
+  .poll-item-aside {
+    flex: 0 0 38%;
+    border-left: 1px solid var(--divider-on-dark);
+    padding-left: var(--space-4);
+  }
+}
+
 /* ───── Restaurant card ───── */
 .restaurant-grid {
   display: grid;

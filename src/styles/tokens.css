@@ -40,6 +40,7 @@
   --text-mute: rgba(0, 0, 0, 0.42);
   --text-on-dark: #ffffff;
   --text-on-dark-soft: rgba(255, 255, 255, 0.7);
+  --divider-on-dark: rgba(255, 255, 255, 0.15);
 
   /* ───── Color: Semantic ───── */
   --danger: #c82014;
