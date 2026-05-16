@@ -1,4 +1,4 @@
-import { formatPrice } from '../lib/menus.js';
+import { formatPrice, compareMenu } from '../lib/menus.js';
 import { categorySlug } from '../lib/config.js';
 
 function escapeHtml(s) {
@@ -18,6 +18,8 @@ function escapeHtml(s) {
  */
 export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice2Id } = {}) {
   const menus = (r.menus || [])
+    .slice()
+    .sort(compareMenu)
     .map(
       (m) =>
         `<li class="menu-row ${m.representative ? 'is-rep' : ''}">

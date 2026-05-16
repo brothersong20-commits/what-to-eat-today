@@ -34,11 +34,26 @@ export function parseMenusText(text) {
 }
 
 /**
+ * 메뉴 정렬 비교자: 대표메뉴 우선, 그 안에서 가격 내림차순,
+ * 가격 없는 항목(null/NaN)은 그룹 맨 뒤.
+ * 표시(restaurant-card)와 저장(serializeMenus)이 동일 기준을 쓰도록 공유.
+ */
+export function compareMenu(a, b) {
+  const ar = a?.representative ? 1 : 0;
+  const br = b?.representative ? 1 : 0;
+  if (ar !== br) return br - ar;
+  const ap = a?.price == null || Number.isNaN(a.price) ? -Infinity : a.price;
+  const bp = b?.price == null || Number.isNaN(b.price) ? -Infinity : b.price;
+  return bp - ap;
+}
+
+/**
  * [{ name, price, representative }] 배열을
  * "*이름(가격)/이름(가격)" 형태의 텍스트로 직렬화.
  * - 이름 trim, 빈 이름 행 제외
  * - price 가 빈 값이면 괄호 생략
  * - representative 면 선두에 `*`
+ * - 대표메뉴 우선·가격 내림차순으로 정렬 후 직렬화
  */
 export function serializeMenus(rows) {
   return (rows || [])
@@ -48,6 +63,7 @@ export function serializeMenus(rows) {
       representative: !!r?.representative
     }))
     .filter((r) => r.name)
+    .sort(compareMenu)
     .map((r) => {
       const prefix = r.representative ? '*' : '';
       const price = r.price != null && !Number.isNaN(r.price) ? `(${r.price})` : '';
