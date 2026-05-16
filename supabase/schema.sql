@@ -45,6 +45,7 @@ alter table public.restaurants add column if not exists capacity_hall int;
 alter table public.restaurants add column if not exists image_url text;
 alter table public.restaurants add column if not exists area text;
 alter table public.restaurants add column if not exists business_hours text;
+alter table public.restaurants add column if not exists is_group_dining boolean not null default false;
 
 -- 카페 — restaurants와 동일 구조에서 회식 수용인원(capacity_*)만 제외.
 -- 점심 식사 후 둘러볼 카페 목록. 투표 후보가 아니라 단순 조회용.
@@ -337,7 +338,8 @@ create or replace function public.create_restaurant(
   p_menus_text      text default null,
   p_note            text default null,
   p_business_hours  text default null,
-  p_active          boolean default true
+  p_active          boolean default true,
+  p_is_group_dining boolean default false
 ) returns text
 language plpgsql
 security definer
@@ -358,7 +360,7 @@ begin
   end if;
 
   insert into public.restaurants (
-    id, name, category, area, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, business_hours, active
+    id, name, category, area, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, business_hours, active, is_group_dining
   ) values (
     btrim(p_id), btrim(p_name),
     nullif(btrim(coalesce(p_category, '')), ''),
@@ -372,7 +374,8 @@ begin
     nullif(btrim(coalesce(p_menus_text, '')), ''),
     nullif(btrim(coalesce(p_note, '')), ''),
     nullif(btrim(coalesce(p_business_hours, '')), ''),
-    coalesce(p_active, true)
+    coalesce(p_active, true),
+    coalesce(p_is_group_dining, false)
   );
 
   return p_id;
@@ -409,7 +412,8 @@ create or replace function public.update_restaurant(
   p_clear_naver_url      boolean default false,
   p_clear_image_url      boolean default false,
   p_clear_capacity_room  boolean default false,
-  p_clear_capacity_hall  boolean default false
+  p_clear_capacity_hall  boolean default false,
+  p_is_group_dining      boolean default null
 ) returns void
 language plpgsql
 security definer
@@ -455,7 +459,8 @@ begin
       menus_text      = coalesce(nullif(btrim(p_menus_text), ''), menus_text),
       note            = coalesce(nullif(btrim(p_note), ''),       note),
       business_hours  = coalesce(nullif(btrim(p_business_hours), ''), business_hours),
-      active          = coalesce(p_active, active)
+      active          = coalesce(p_active, active),
+      is_group_dining = coalesce(p_is_group_dining, is_group_dining)
   where id = p_id;
 end;
 $$;
@@ -746,8 +751,8 @@ end $$;
 grant execute on function public.submit_vote(text, text, text, text, text)                     to anon, authenticated;
 grant execute on function public.create_poll(text, text, text, date, time, timestamptz, text, text[])          to anon, authenticated;
 grant execute on function public.update_poll(text, text, text, text, date, time, timestamptz, text, boolean, text, text[]) to anon, authenticated;
-grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean)     to anon, authenticated;
-grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
+grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean)     to anon, authenticated;
+grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
 grant execute on function public.delete_poll(text, text)                                       to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;

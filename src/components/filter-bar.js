@@ -8,7 +8,7 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-export function filterBarHtml({ categories, areas = [], selectedCategory, selectedArea, query, searchPlaceholder = '식당명 검색' }) {
+export function filterBarHtml({ categories, areas = [], selectedCategory, selectedArea, query, searchPlaceholder = '식당명 검색', groupDining = false }) {
   const categoryChips = ['전체', ...categories]
     .map((c) => {
       const value = c === '전체' ? '' : c;
@@ -35,6 +35,12 @@ export function filterBarHtml({ categories, areas = [], selectedCategory, select
       </div>`
     : '';
 
+  const groupDiningRow = groupDining
+    ? `<div class="chip-row" id="filter-group-dining" role="group" aria-label="단체 회식 필터">
+        <button type="button" class="chip chip--group-dining" data-group-dining aria-pressed="false">단체 회식만</button>
+      </div>`
+    : '';
+
   return `
     <div class="filter-bar stack-3">
       <div class="search-field">
@@ -51,6 +57,7 @@ export function filterBarHtml({ categories, areas = [], selectedCategory, select
         ${categoryChips}
       </div>
       ${areaRow}
+      ${groupDiningRow}
     </div>
   `;
 }
@@ -86,14 +93,25 @@ export function bindFilterBar(root, state, onChange) {
     btn.classList.add('is-active');
     onChange({ ...state });
   });
+
+  const groupDiningRoot = root.querySelector('#filter-group-dining');
+  groupDiningRoot?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-group-dining]');
+    if (!btn) return;
+    state.groupDining = !state.groupDining;
+    btn.classList.toggle('is-active', state.groupDining);
+    btn.setAttribute('aria-pressed', state.groupDining ? 'true' : 'false');
+    onChange({ ...state });
+  });
 }
 
-export function applyFilter(restaurants, { category, area, query }) {
+export function applyFilter(restaurants, { category, area, query, groupDining }) {
   const q = (query || '').trim().toLowerCase();
   return restaurants.filter((r) => {
     if (category && r.category !== category) return false;
     if (area && r.area !== area) return false;
     if (q && !r.name.toLowerCase().includes(q)) return false;
+    if (groupDining && !r.isGroupDining) return false;
     return true;
   });
 }

@@ -722,10 +722,10 @@ function mountRestaurantPicker(els, restaurants, opts = {}) {
 
   const selectedIds = new Set(initiallySelected);
   const removedSet = new Set(removedDisplay);
-  const filterState = { category: '', query: '' };
+  const filterState = { category: '', query: '', groupDining: false };
 
   const categories = [...new Set(restaurants.map((r) => r.category).filter(Boolean))];
-  filterMount.innerHTML = filterBarHtml({ categories, selectedCategory: '', query: '' });
+  filterMount.innerHTML = filterBarHtml({ categories, selectedCategory: '', query: '', groupDining: true });
 
   function renderList() {
     // 후보군 = 활성 식당 + (선택됐거나 취소됨으로 표시할 비활성 식당)
@@ -740,6 +740,7 @@ function mountRestaurantPicker(els, restaurants, opts = {}) {
       const isRemoved = removedSet.has(r.id) && !selectedIds.has(r.id);
       const badges = `
         ${r.category ? `<span class="rc-badge">${escapeHtml(r.category)}</span>` : ''}
+        ${r.isGroupDining ? `<span class="rc-badge rc-badge--group-dining">단체 회식</span>` : ''}
         ${isRemoved ? `<span class="removed-badge">취소됨</span>` : ''}
       `;
       const disabledAttr = disabled ? 'disabled' : '';
@@ -1063,7 +1064,7 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
           <h3>${editing ? `식당 수정 — ${escapeHtml(editing.name)}` : '새 식당 추가'}</h3>
           ${editing ? '' : `<p class="text-soft fs-small">ID는 자동 부여됩니다. 이름은 필수.</p>`}
         </div>
-        ${restaurantFormHtml(editing, { ...options, nextId: nextRestaurantId(restaurants) })}
+        ${restaurantFormHtml(editing, { ...options, nextId: nextRestaurantId(restaurants), showGroupDining: true })}
         <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
           <div class="row-2">
             ${editing ? `
@@ -1204,19 +1205,21 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
       return;
     }
 
+    const isGroupDining = mount.querySelector('#rf-group-dining')?.checked || false;
+
     try {
       if (editing) {
         await updateRestaurant({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours }
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining }
         });
         showToast('수정되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createRestaurant({
           adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining
         });
         showToast('식당이 추가되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: id });
@@ -1588,6 +1591,7 @@ function restaurantRowHtml(r, isEditing) {
       <span class="rest-id">${escapeHtml(r.id)}</span>
       ${r.category ? `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>` : ''}
       ${r.area ? `<span class="rc-badge rc-badge--area">${escapeHtml(r.area)}</span>` : ''}
+      ${r.isGroupDining ? `<span class="rc-badge rc-badge--group-dining">단체 회식</span>` : ''}
       <span class="rest-name">${escapeHtml(r.name)}</span>
       ${r.naverUrl ? `<a class="rest-naver" href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
       <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>
@@ -1660,6 +1664,15 @@ function restaurantFormHtml(r, opts = {}) {
             <input type="number" id="rf-walking" class="input" min="0" value="${v.walkingMinutes != null ? v.walkingMinutes : ''}" placeholder="예: 5" />
           </div>
         </div>
+        ${opts.showGroupDining ? `
+        <div class="stack-3">
+          <label class="rf-checkbox" for="rf-group-dining">
+            <input type="checkbox" id="rf-group-dining" ${v.isGroupDining ? 'checked' : ''} />
+            <span>단체 회식 가능 (10인 이상)</span>
+          </label>
+          <p class="text-soft fs-small">체크하면 식당 카드·목록에 인증 배지가 표시되고, 회식 투표 생성 시 필터로 추려낼 수 있습니다.</p>
+        </div>
+        ` : ''}
       </section>
 
       <section class="rf-section stack-3">

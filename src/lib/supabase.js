@@ -39,7 +39,8 @@ function mapRestaurant(r) {
     menus: parseMenusText(r.menus_text),
     note: r.note || '',
     businessHours: r.business_hours || '',
-    active: !!r.active
+    active: !!r.active,
+    isGroupDining: !!r.is_group_dining
   };
 }
 
@@ -202,7 +203,7 @@ export async function updatePoll({ adminKey, pollId, patch }) {
 // ─────────────────────────────────────────────────────────
 // 식당 CRUD (관리자)
 // ─────────────────────────────────────────────────────────
-export async function createRestaurant({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, businessHours, active }) {
+export async function createRestaurant({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, businessHours, active, isGroupDining }) {
   const { data, error } = await supabase.rpc('create_restaurant', {
     p_admin_key: adminKey || '',
     p_id: id,
@@ -218,7 +219,8 @@ export async function createRestaurant({ adminKey, id, name, category, area, add
     p_menus_text: menusText || null,
     p_note: note || null,
     p_business_hours: businessHours || null,
-    p_active: active !== false
+    p_active: active !== false,
+    p_is_group_dining: !!isGroupDining
   });
   if (error) throwTranslated(error);
   return { ok: true, id: data };
@@ -244,7 +246,8 @@ export async function updateRestaurant({ adminKey, id, patch }) {
     p_clear_naver_url: false,
     p_clear_image_url: false,
     p_clear_capacity_room: false,
-    p_clear_capacity_hall: false
+    p_clear_capacity_hall: false,
+    p_is_group_dining: null
   };
   const p = patch || {};
   if (p.name !== undefined) params.p_name = p.name;
@@ -272,6 +275,7 @@ export async function updateRestaurant({ adminKey, id, patch }) {
   if (p.note !== undefined) params.p_note = p.note;
   if (p.businessHours !== undefined) params.p_business_hours = p.businessHours;
   if (p.active !== undefined) params.p_active = p.active;
+  if (p.isGroupDining !== undefined) params.p_is_group_dining = p.isGroupDining;
 
   const { error } = await supabase.rpc('update_restaurant', params);
   if (error) throwTranslated(error);

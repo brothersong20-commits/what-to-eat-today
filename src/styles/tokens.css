@@ -28,6 +28,10 @@
   --area-bg: #dde3e6;
   --area-fg: #44535c;
 
+  /* ───── Color: Group dining (단체 회식 인증 — Starbucks 그린 톤, rest-flag.is-active와 동일) ───── */
+  --badge-group-dining-bg: var(--green-light);
+  --badge-group-dining-fg: var(--green-starbucks);
+
   /* ───── Color: Naver brand (지도 CTA 한정) ───── */
   --naver-green: #03c75a;
   --naver-green-strong: #02a94c;

@@ -196,7 +196,7 @@ export async function renderHome(app) {
 
   // 식당 섹션도 카페와 동일하게 독립 렌더 — early return이 renderHome 전체를 중단하지 않도록.
   (async () => {
-    const filterState = { category: '', area: '', query: '' };
+    const filterState = { category: '', area: '', query: '', groupDining: false };
     const filterMount = app.querySelector('#filter-bar-mount');
     const listEl = app.querySelector('#restaurant-list');
     const summaryEl = app.querySelector('#restaurant-summary');
@@ -222,7 +222,8 @@ export async function renderHome(app) {
       areas,
       selectedCategory: filterState.category,
       selectedArea: filterState.area,
-      query: filterState.query
+      query: filterState.query,
+      groupDining: true
     });
 
     function render() {
