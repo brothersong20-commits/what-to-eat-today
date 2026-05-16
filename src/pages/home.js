@@ -51,7 +51,7 @@ export async function renderHome(app) {
     </section>
   `;
 
-  const filterState = { category: '', query: '' };
+  const filterState = { category: '', area: '', query: '' };
   const filterMount = app.querySelector('#filter-bar-mount');
   const listEl = app.querySelector('#restaurant-list');
   const summaryEl = app.querySelector('#restaurant-summary');
@@ -121,9 +121,12 @@ export async function renderHome(app) {
   }
 
   const categories = [...new Set(restaurants.map((r) => r.category).filter(Boolean))];
+  const areas = [...new Set(restaurants.map((r) => r.area).filter(Boolean))];
   filterMount.innerHTML = filterBarHtml({
     categories,
+    areas,
     selectedCategory: filterState.category,
+    selectedArea: filterState.area,
     query: filterState.query
   });
 

@@ -104,7 +104,7 @@ export async function renderVote(app, { id: pollId }) {
     attendance: '',
     choice1Id: '',
     choice2Id: '',
-    filter: { category: '', query: '' },
+    filter: { category: '', area: '', query: '' },
     submitting: false
   };
 
@@ -224,7 +224,8 @@ export async function renderVote(app, { id: pollId }) {
   const choiceSummary = root.querySelector('#choice-summary');
 
   const categories = [...new Set(restaurants.map((r) => r.category).filter(Boolean))];
-  filterMount.innerHTML = filterBarHtml({ categories, selectedCategory: '', query: '' });
+  const areas = [...new Set(restaurants.map((r) => r.area).filter(Boolean))];
+  filterMount.innerHTML = filterBarHtml({ categories, areas, selectedCategory: '', selectedArea: '', query: '' });
 
   function renderList() {
     const filtered = applyFilter(restaurants, state.filter);

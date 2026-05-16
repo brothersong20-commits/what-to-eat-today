@@ -1,5 +1,8 @@
 export const CATEGORIES = ['한식', '중식', '일식', '양식', '분식', '회', '고기', '기타'];
 
+// 회사 주변 지역. CATEGORIES와 동일하게 안내용 고정 목록 — 실제 칩은 DB값에서 동적 추출.
+export const AREAS = ['아트포레', '송해원', '푸르지오시티', 'IBS타워', '커낼워크', '인천대입구'];
+
 export const CATEGORY_SLUGS = {
   '한식': 'han',
   '중식': 'jung',

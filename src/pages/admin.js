@@ -1,5 +1,5 @@
 import { createPoll, updatePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive } from '../lib/supabase.js';
-import { CATEGORIES, categorySlug } from '../lib/config.js';
+import { CATEGORIES, AREAS, categorySlug } from '../lib/config.js';
 import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
@@ -1037,6 +1037,19 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
     }
   });
 
+  // 지역 select / direct input 토글
+  const areaSelect = mount.querySelector('#rf-area-select');
+  const areaInput = mount.querySelector('#rf-area-input');
+  areaSelect.addEventListener('change', () => {
+    if (areaSelect.value === '__custom__') {
+      areaInput.hidden = false;
+      areaInput.focus();
+    } else {
+      areaInput.hidden = true;
+      areaInput.value = '';
+    }
+  });
+
   // 메뉴 표 — 행 추가 / 삭제
   mount.querySelector('#rf-menu-add')?.addEventListener('click', () => {
     mount.querySelector('#rf-menu-rows').insertAdjacentHTML('beforeend', menuRowHtml({}));
@@ -1066,6 +1079,10 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
       categorySelect.value === '__custom__'
         ? (categoryInput.value || '').trim()
         : categorySelect.value;
+    const area =
+      areaSelect.value === '__custom__'
+        ? (areaInput.value || '').trim()
+        : areaSelect.value;
     const address = (mount.querySelector('#rf-address').value || '').trim();
     const naverUrl = (mount.querySelector('#rf-naver-url').value || '').trim();
     const imageUrl = (mount.querySelector('#rf-image-url').value || '').trim();
@@ -1104,14 +1121,14 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
         await updateRestaurant({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, address, naverUrl, imageUrl, walkingMinutes, menusText, note }
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note }
         });
         showToast('수정되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createRestaurant({
           adminKey: getStoredKey(),
-          id, name, category, address, naverUrl, imageUrl, walkingMinutes, menusText, note
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note
         });
         showToast('식당이 추가되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: id });
@@ -1128,6 +1145,7 @@ function restaurantRowHtml(r, isEditing) {
       ${r.imageUrl ? `<img class="rest-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />` : ''}
       <span class="rest-id">${escapeHtml(r.id)}</span>
       ${r.category ? `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>` : ''}
+      ${r.area ? `<span class="rc-badge rc-badge--area">${escapeHtml(r.area)}</span>` : ''}
       <span class="rest-name">${escapeHtml(r.name)}</span>
       ${r.naverUrl ? `<a class="rest-naver" href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
       <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>
@@ -1139,6 +1157,8 @@ function restaurantFormHtml(r) {
   const v = r || {};
   const selectedCategory = v.category || '';
   const isCustomCategory = selectedCategory && !CATEGORIES.includes(selectedCategory);
+  const selectedArea = v.area || '';
+  const isCustomArea = selectedArea && !AREAS.includes(selectedArea);
   return `
     <form id="rest-form" class="stack-4" novalidate>
       <section class="rf-section stack-3">
@@ -1163,6 +1183,15 @@ function restaurantFormHtml(r) {
               <option value="__custom__" ${isCustomCategory ? 'selected' : ''}>+ 직접 입력</option>
             </select>
             <input type="text" id="rf-category-input" class="input" ${isCustomCategory ? '' : 'hidden'} value="${isCustomCategory ? escapeHtml(selectedCategory) : ''}" placeholder="예: 퓨전" />
+          </div>
+          <div class="stack-3" style="flex: 1; min-width: 14rem;">
+            <label class="field-label" for="rf-area-select">지역</label>
+            <select id="rf-area-select" class="input">
+              <option value="">(없음)</option>
+              ${AREAS.map((a) => `<option value="${escapeHtml(a)}" ${a === selectedArea ? 'selected' : ''}>${escapeHtml(a)}</option>`).join('')}
+              <option value="__custom__" ${isCustomArea ? 'selected' : ''}>+ 직접 입력</option>
+            </select>
+            <input type="text" id="rf-area-input" class="input" ${isCustomArea ? '' : 'hidden'} value="${isCustomArea ? escapeHtml(selectedArea) : ''}" placeholder="예: 인천대입구" />
           </div>
           <div class="stack-3" style="flex: 1; min-width: 12rem;">
             <label class="field-label" for="rf-walking">도보 (분)</label>

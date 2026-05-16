@@ -28,6 +28,7 @@ function mapRestaurant(r) {
     id: r.id,
     name: r.name,
     category: r.category || '',
+    area: r.area || '',
     address: r.address || '',
     naverUrl: r.naver_url || '',
     imageUrl: r.image_url || '',
@@ -174,12 +175,13 @@ export async function updatePoll({ adminKey, pollId, patch }) {
 // ─────────────────────────────────────────────────────────
 // 식당 CRUD (관리자)
 // ─────────────────────────────────────────────────────────
-export async function createRestaurant({ adminKey, id, name, category, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, active }) {
+export async function createRestaurant({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, active }) {
   const { data, error } = await supabase.rpc('create_restaurant', {
     p_admin_key: adminKey || '',
     p_id: id,
     p_name: name,
     p_category: category || null,
+    p_area: area || null,
     p_address: address || null,
     p_naver_url: naverUrl || null,
     p_image_url: imageUrl || null,
@@ -200,6 +202,7 @@ export async function updateRestaurant({ adminKey, id, patch }) {
     p_id: id,
     p_name: null,
     p_category: null,
+    p_area: null,
     p_address: null,
     p_naver_url: null,
     p_image_url: null,
@@ -217,6 +220,7 @@ export async function updateRestaurant({ adminKey, id, patch }) {
   const p = patch || {};
   if (p.name !== undefined) params.p_name = p.name;
   if (p.category !== undefined) params.p_category = p.category;
+  if (p.area !== undefined) params.p_area = p.area;
   if (p.address !== undefined) params.p_address = p.address;
   if (p.naverUrl !== undefined) {
     if (p.naverUrl === '') params.p_clear_naver_url = true;

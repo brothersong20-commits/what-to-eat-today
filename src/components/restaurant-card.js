@@ -29,6 +29,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
 
   const meta = [
     r.category && `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>`,
+    r.area && `<span class="rc-badge rc-badge--area">${escapeHtml(r.area)}</span>`,
     r.walkingMinutes != null && `<span class="rc-meta">🚶 도보 ${r.walkingMinutes}분</span>`
   ]
     .filter(Boolean)

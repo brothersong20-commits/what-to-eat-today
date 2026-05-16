@@ -24,6 +24,10 @@
   --cat-etc-bg: #e3e5df;   /* 기타/미매칭 — 중립 세이지 */
   --cat-etc-fg: #586054;
 
+  /* ───── Color: Area (지역 — 단일 중립 슬레이트, 카테고리색과 구분) ───── */
+  --area-bg: #dde3e6;
+  --area-fg: #44535c;
+
   /* ───── Color: Naver brand (지도 CTA 한정) ───── */
   --naver-green: #03c75a;
   --naver-green-strong: #02a94c;

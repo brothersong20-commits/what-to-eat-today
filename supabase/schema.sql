@@ -43,6 +43,7 @@ alter table public.restaurants add column if not exists naver_url text;
 alter table public.restaurants add column if not exists capacity_room int;
 alter table public.restaurants add column if not exists capacity_hall int;
 alter table public.restaurants add column if not exists image_url text;
+alter table public.restaurants add column if not exists area text;
 
 create table if not exists public.polls (
   id                     text primary key,
@@ -305,6 +306,7 @@ create or replace function public.create_restaurant(
   p_id              text,
   p_name            text,
   p_category        text default null,
+  p_area            text default null,
   p_address         text default null,
   p_naver_url       text default null,
   p_image_url       text default null,
@@ -334,10 +336,11 @@ begin
   end if;
 
   insert into public.restaurants (
-    id, name, category, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, active
+    id, name, category, area, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, active
   ) values (
     btrim(p_id), btrim(p_name),
     nullif(btrim(coalesce(p_category, '')), ''),
+    nullif(btrim(coalesce(p_area, '')), ''),
     nullif(btrim(coalesce(p_address, '')), ''),
     nullif(btrim(coalesce(p_naver_url, '')), ''),
     nullif(btrim(coalesce(p_image_url, '')), ''),
@@ -369,6 +372,7 @@ create or replace function public.update_restaurant(
   p_id                   text,
   p_name                 text default null,
   p_category             text default null,
+  p_area                 text default null,
   p_address              text default null,
   p_naver_url            text default null,
   p_image_url            text default null,
@@ -401,6 +405,7 @@ begin
   update public.restaurants
   set name            = coalesce(nullif(btrim(p_name), ''),     name),
       category        = coalesce(nullif(btrim(p_category), ''), category),
+      area            = coalesce(nullif(btrim(p_area), ''),     area),
       address         = coalesce(nullif(btrim(p_address), ''),  address),
       naver_url       = case
                           when p_clear_naver_url then null
@@ -511,7 +516,7 @@ end $$;
 grant execute on function public.submit_vote(text, text, text, text, text)                     to anon, authenticated;
 grant execute on function public.create_poll(text, text, text, date, time, timestamptz, text, text[])          to anon, authenticated;
 grant execute on function public.update_poll(text, text, text, text, date, time, timestamptz, text, boolean, text, text[]) to anon, authenticated;
-grant execute on function public.create_restaurant(text, text, text, text, text, text, text, int, int, int, text, text, boolean)     to anon, authenticated;
-grant execute on function public.update_restaurant(text, text, text, text, text, text, text, int, int, int, text, text, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
+grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, boolean)     to anon, authenticated;
+grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;

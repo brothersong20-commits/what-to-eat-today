@@ -8,8 +8,8 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-export function filterBarHtml({ categories, selectedCategory, query }) {
-  const chips = ['전체', ...categories]
+export function filterBarHtml({ categories, areas = [], selectedCategory, selectedArea, query }) {
+  const categoryChips = ['전체', ...categories]
     .map((c) => {
       const value = c === '전체' ? '' : c;
       const active = (selectedCategory || '') === value;
@@ -17,6 +17,23 @@ export function filterBarHtml({ categories, selectedCategory, query }) {
       return `<button type="button" class="chip${slugClass} ${active ? 'is-active' : ''}" data-category="${escapeHtml(value)}">${escapeHtml(c)}</button>`;
     })
     .join('');
+
+  const areaChips = areas.length
+    ? ['전체', ...areas]
+        .map((a) => {
+          const value = a === '전체' ? '' : a;
+          const active = (selectedArea || '') === value;
+          const areaClass = value ? ' chip--area' : '';
+          return `<button type="button" class="chip${areaClass} ${active ? 'is-active' : ''}" data-area="${escapeHtml(value)}">${escapeHtml(a)}</button>`;
+        })
+        .join('')
+    : '';
+
+  const areaRow = areaChips
+    ? `<div class="chip-row" id="filter-areas" role="group" aria-label="지역 필터">
+        ${areaChips}
+      </div>`
+    : '';
 
   return `
     <div class="filter-bar stack-3">
@@ -31,8 +48,9 @@ export function filterBarHtml({ categories, selectedCategory, query }) {
         />
       </div>
       <div class="chip-row" id="filter-chips" role="group" aria-label="카테고리 필터">
-        ${chips}
+        ${categoryChips}
       </div>
+      ${areaRow}
     </div>
   `;
 }
@@ -44,6 +62,7 @@ export function filterBarHtml({ categories, selectedCategory, query }) {
 export function bindFilterBar(root, state, onChange) {
   const queryInput = root.querySelector('#filter-query');
   const chipsRoot = root.querySelector('#filter-chips');
+  const areasRoot = root.querySelector('#filter-areas');
 
   queryInput?.addEventListener('input', (e) => {
     state.query = e.target.value;
@@ -58,12 +77,22 @@ export function bindFilterBar(root, state, onChange) {
     btn.classList.add('is-active');
     onChange({ ...state });
   });
+
+  areasRoot?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-area]');
+    if (!btn) return;
+    state.area = btn.dataset.area || '';
+    areasRoot.querySelectorAll('.chip').forEach((c) => c.classList.remove('is-active'));
+    btn.classList.add('is-active');
+    onChange({ ...state });
+  });
 }
 
-export function applyFilter(restaurants, { category, query }) {
+export function applyFilter(restaurants, { category, area, query }) {
   const q = (query || '').trim().toLowerCase();
   return restaurants.filter((r) => {
     if (category && r.category !== category) return false;
+    if (area && r.area !== area) return false;
     if (q && !r.name.toLowerCase().includes(q)) return false;
     return true;
   });
