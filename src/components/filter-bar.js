@@ -8,7 +8,7 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-export function filterBarHtml({ categories, areas = [], selectedCategory, selectedArea, query }) {
+export function filterBarHtml({ categories, areas = [], selectedCategory, selectedArea, query, searchPlaceholder = '식당명 검색' }) {
   const categoryChips = ['전체', ...categories]
     .map((c) => {
       const value = c === '전체' ? '' : c;
@@ -42,7 +42,7 @@ export function filterBarHtml({ categories, areas = [], selectedCategory, select
           type="search"
           class="input"
           id="filter-query"
-          placeholder="식당명 검색"
+          placeholder="${escapeHtml(searchPlaceholder)}"
           autocomplete="off"
           value="${escapeHtml(query || '')}"
         />

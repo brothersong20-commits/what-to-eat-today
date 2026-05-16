@@ -1554,6 +1554,39 @@ textarea {
   margin-left: auto;
 }
 
+/* 홈 둘러보기 탭 (식당 / 카페) — admin-tab과 동일 시각 패턴 */
+.browse-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-input);
+  flex-wrap: wrap;
+}
+.browse-tab {
+  background: transparent;
+  border: none;
+  padding: 1rem 1.6rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color var(--duration) var(--ease),
+    border-color var(--duration) var(--ease);
+}
+.browse-tab:hover {
+  color: var(--green-accent);
+}
+.browse-tab.is-active {
+  color: var(--green-starbucks);
+  border-bottom-color: var(--green-accent);
+}
+/* .stack-4의 display:flex가 [hidden]을 덮어쓰므로 명시적으로 숨김 */
+.browse-pane[hidden] {
+  display: none;
+}
+
 /* 관리자 폼 — 2단 행 (df-/nf- 공통, 식당 폼과 동일 패턴) */
 .field-pair {
   display: flex;

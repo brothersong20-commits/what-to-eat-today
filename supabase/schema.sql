@@ -45,6 +45,25 @@ alter table public.restaurants add column if not exists capacity_hall int;
 alter table public.restaurants add column if not exists image_url text;
 alter table public.restaurants add column if not exists area text;
 
+-- 카페 — restaurants와 동일 구조에서 회식 수용인원(capacity_*)만 제외.
+-- 점심 식사 후 둘러볼 카페 목록. 투표 후보가 아니라 단순 조회용.
+create table if not exists public.cafes (
+  id              text primary key,
+  name            text not null,
+  category        text,
+  area            text,
+  address         text,
+  naver_url       text,
+  image_url       text,
+  walking_minutes int,
+  menus_text      text,
+  note            text,
+  active          boolean not null default true,
+  created_at      timestamptz not null default now()
+);
+alter table public.cafes add column if not exists area text;
+alter table public.cafes add column if not exists image_url text;
+
 create table if not exists public.polls (
   id                     text primary key,
   title                  text not null,
@@ -504,17 +523,195 @@ end;
 $$;
 
 -- ─────────────────────────────────────────────────────────
+-- 4.6. RPC: 카페 CRUD (관리자 전용) — 식당 RPC 미러, capacity_* 제외.
+-- ─────────────────────────────────────────────────────────
+do $$
+declare r record;
+begin
+  for r in
+    select 'drop function if exists public.create_cafe('
+           || pg_get_function_identity_arguments(p.oid) || ') cascade;' as cmd
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'create_cafe'
+  loop execute r.cmd; end loop;
+end $$;
+create or replace function public.create_cafe(
+  p_admin_key       text,
+  p_id              text,
+  p_name            text,
+  p_category        text default null,
+  p_area            text default null,
+  p_address         text default null,
+  p_naver_url       text default null,
+  p_image_url       text default null,
+  p_walking_minutes int default null,
+  p_menus_text      text default null,
+  p_note            text default null,
+  p_active          boolean default true
+) returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected text;
+begin
+  select value into v_expected from private.app_config where key = 'admin_key';
+  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+    raise exception 'unauthorized';
+  end if;
+  if p_id is null or btrim(p_id) = '' or p_name is null or btrim(p_name) = '' then
+    raise exception 'missing_required_fields';
+  end if;
+  if exists (select 1 from public.cafes where id = p_id) then
+    raise exception 'id_already_exists';
+  end if;
+
+  insert into public.cafes (
+    id, name, category, area, address, naver_url, image_url, walking_minutes, menus_text, note, active
+  ) values (
+    btrim(p_id), btrim(p_name),
+    nullif(btrim(coalesce(p_category, '')), ''),
+    nullif(btrim(coalesce(p_area, '')), ''),
+    nullif(btrim(coalesce(p_address, '')), ''),
+    nullif(btrim(coalesce(p_naver_url, '')), ''),
+    nullif(btrim(coalesce(p_image_url, '')), ''),
+    p_walking_minutes,
+    nullif(btrim(coalesce(p_menus_text, '')), ''),
+    nullif(btrim(coalesce(p_note, '')), ''),
+    coalesce(p_active, true)
+  );
+
+  return p_id;
+end;
+$$;
+
+do $$
+declare r record;
+begin
+  for r in
+    select 'drop function if exists public.update_cafe('
+           || pg_get_function_identity_arguments(p.oid) || ') cascade;' as cmd
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'update_cafe'
+  loop execute r.cmd; end loop;
+end $$;
+create or replace function public.update_cafe(
+  p_admin_key       text,
+  p_id              text,
+  p_name            text default null,
+  p_category        text default null,
+  p_area            text default null,
+  p_address         text default null,
+  p_naver_url       text default null,
+  p_image_url       text default null,
+  p_walking_minutes int default null,
+  p_menus_text      text default null,
+  p_note            text default null,
+  p_active          boolean default null,
+  p_clear_naver_url boolean default false,
+  p_clear_image_url boolean default false
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected text;
+begin
+  select value into v_expected from private.app_config where key = 'admin_key';
+  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+    raise exception 'unauthorized';
+  end if;
+  if not exists (select 1 from public.cafes where id = p_id) then
+    raise exception 'cafe_not_found';
+  end if;
+
+  update public.cafes
+  set name            = coalesce(nullif(btrim(p_name), ''),     name),
+      category        = coalesce(nullif(btrim(p_category), ''), category),
+      area            = coalesce(nullif(btrim(p_area), ''),     area),
+      address         = coalesce(nullif(btrim(p_address), ''),  address),
+      naver_url       = case
+                          when p_clear_naver_url then null
+                          when p_naver_url is not null and btrim(p_naver_url) <> '' then btrim(p_naver_url)
+                          else naver_url
+                        end,
+      image_url       = case
+                          when p_clear_image_url then null
+                          when p_image_url is not null and btrim(p_image_url) <> '' then btrim(p_image_url)
+                          else image_url
+                        end,
+      walking_minutes = coalesce(p_walking_minutes, walking_minutes),
+      menus_text      = coalesce(nullif(btrim(p_menus_text), ''), menus_text),
+      note            = coalesce(nullif(btrim(p_note), ''),       note),
+      active          = coalesce(p_active, active)
+  where id = p_id;
+end;
+$$;
+
+create or replace function public.delete_cafe(
+  p_admin_key text,
+  p_id        text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected text;
+begin
+  select value into v_expected from private.app_config where key = 'admin_key';
+  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+    raise exception 'unauthorized';
+  end if;
+  if not exists (select 1 from public.cafes where id = p_id) then
+    raise exception 'cafe_not_found';
+  end if;
+  delete from public.cafes where id = p_id;
+end;
+$$;
+
+create or replace function public.set_cafe_active(
+  p_admin_key text,
+  p_id        text,
+  p_active    boolean
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected text;
+begin
+  select value into v_expected from private.app_config where key = 'admin_key';
+  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+    raise exception 'unauthorized';
+  end if;
+  if not exists (select 1 from public.cafes where id = p_id) then
+    raise exception 'cafe_not_found';
+  end if;
+  update public.cafes set active = coalesce(p_active, true) where id = p_id;
+end;
+$$;
+
+-- ─────────────────────────────────────────────────────────
 -- 5. RLS — 읽기는 누구나, 쓰기는 RPC만 (RPC는 security definer라 우회)
 -- ─────────────────────────────────────────────────────────
 alter table public.restaurants enable row level security;
+alter table public.cafes       enable row level security;
 alter table public.polls       enable row level security;
 alter table public.votes       enable row level security;
 
 drop policy if exists restaurants_read on public.restaurants;
+drop policy if exists cafes_read       on public.cafes;
 drop policy if exists polls_read       on public.polls;
 drop policy if exists votes_read       on public.votes;
 
 create policy restaurants_read on public.restaurants for select using (true);
+create policy cafes_read       on public.cafes       for select using (true);
 create policy polls_read       on public.polls       for select using (true);
 create policy votes_read       on public.votes       for select using (true);
 -- INSERT/UPDATE/DELETE 정책은 일부러 없음 → 익명 클라이언트는 직접 변경 불가.
@@ -544,6 +741,10 @@ grant execute on function public.update_restaurant(text, text, text, text, text,
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
 grant execute on function public.delete_poll(text, text)                                       to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;
+grant execute on function public.create_cafe(text, text, text, text, text, text, text, text, int, text, text, boolean)             to anon, authenticated;
+grant execute on function public.update_cafe(text, text, text, text, text, text, text, text, int, text, text, boolean, boolean, boolean) to anon, authenticated;
+grant execute on function public.delete_cafe(text, text)                                       to anon, authenticated;
+grant execute on function public.set_cafe_active(text, text, boolean)                          to anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────
 -- 8. 분류 옵션 (카테고리·지역) — 관리자가 추가/수정/삭제
@@ -558,6 +759,11 @@ create table if not exists public.app_options (
   created_at  timestamptz not null default now(),
   primary key (kind, value)
 );
+
+-- kind 제약을 카페 카테고리까지 확장 (이미 생성된 테이블에도 멱등 반영)
+alter table public.app_options drop constraint if exists app_options_kind_check;
+alter table public.app_options add constraint app_options_kind_check
+  check (kind in ('category','area','cafe_category'));
 
 alter table public.app_options enable row level security;
 drop policy if exists app_options_read on public.app_options;
@@ -581,7 +787,7 @@ begin
   if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
     raise exception 'unauthorized';
   end if;
-  if p_kind not in ('category', 'area') then
+  if p_kind not in ('category', 'area', 'cafe_category') then
     raise exception 'invalid_kind';
   end if;
   v_value := btrim(coalesce(p_value, ''));
@@ -620,7 +826,7 @@ begin
   if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
     raise exception 'unauthorized';
   end if;
-  if p_kind not in ('category', 'area') then
+  if p_kind not in ('category', 'area', 'cafe_category') then
     raise exception 'invalid_kind';
   end if;
   v_old := btrim(coalesce(p_old_value, ''));
@@ -644,6 +850,9 @@ begin
     update public.restaurants set category = v_new where category = v_old;
   elsif p_kind = 'area' then
     update public.restaurants set area = v_new where area = v_old;
+    update public.cafes       set area = v_new where area = v_old;
+  elsif p_kind = 'cafe_category' then
+    update public.cafes set category = v_new where category = v_old;
   end if;
 end;
 $$;
@@ -694,4 +903,15 @@ insert into public.app_options (kind, value, sort_order) values
   ('area', 'IBS타워',      4),
   ('area', '커낼워크',     5),
   ('area', '인천대입구',   6)
+on conflict (kind, value) do nothing;
+
+-- 카페 카테고리 시드 (멱등). config.js의 CAFE_CATEGORIES와 동일 순서.
+insert into public.app_options (kind, value, sort_order) values
+  ('cafe_category', '프랜차이즈', 1),
+  ('cafe_category', '개인카페',   2),
+  ('cafe_category', '베이커리',   3),
+  ('cafe_category', '디저트',     4),
+  ('cafe_category', '로스터리',   5),
+  ('cafe_category', '브런치',     6),
+  ('cafe_category', '기타',       7)
 on conflict (kind, value) do nothing;

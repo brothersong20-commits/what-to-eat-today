@@ -1,5 +1,5 @@
-import { createPoll, updatePoll, deletePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive, loadOptions, createOption, updateOption, deleteOption } from '../lib/supabase.js';
-import { CATEGORIES, AREAS, categorySlug } from '../lib/config.js';
+import { createPoll, updatePoll, deletePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive, loadCafes, createCafe, updateCafe, deleteCafe, setCafeActive, loadOptions, createOption, updateOption, deleteOption } from '../lib/supabase.js';
+import { CATEGORIES, AREAS, CAFE_CATEGORIES, categorySlug } from '../lib/config.js';
 import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
@@ -131,6 +131,7 @@ function renderShell(root, { initialTab = 'active', autoOpenPollId = null } = {}
       <button type="button" class="admin-tab" data-tab="active" role="tab">진행중인 투표</button>
       <button type="button" class="admin-tab" data-tab="new" role="tab">새 투표 만들기</button>
       <button type="button" class="admin-tab" data-tab="restaurants" role="tab">식당 관리</button>
+      <button type="button" class="admin-tab" data-tab="cafes" role="tab">카페 관리</button>
       <button type="button" class="admin-tab" data-tab="options" role="tab">분류 관리</button>
       <button type="button" class="btn btn-ghost admin-logout" id="admin-logout">로그아웃</button>
     </div>
@@ -145,6 +146,7 @@ function renderShell(root, { initialTab = 'active', autoOpenPollId = null } = {}
     runAllCleanups();
     if (tab === 'active') renderActiveList(body, root, { autoOpenPollId });
     else if (tab === 'restaurants') renderRestaurantsTab(body, root);
+    else if (tab === 'cafes') renderCafesTab(body, root);
     else if (tab === 'options') renderOptionsTab(body, root);
     else renderForm(body, root);
   }
@@ -1225,7 +1227,215 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
 }
 
 // ─────────────────────────────────────────────────────────
-// 분류 관리 (카테고리·지역 옵션 CRUD)
+// 카페 관리 탭 — 식당 관리 탭 미러 (폼·행·메뉴 헬퍼 재사용, capacity 없음)
+// ─────────────────────────────────────────────────────────
+async function renderCafesTab(mount, shellRoot, { editingId = null } = {}) {
+  mount.innerHTML = `<div class="state"><p>카페 목록을 불러오는 중...</p></div>`;
+
+  let cafes = [];
+  let options = { cafeCategories: CAFE_CATEGORIES, areas: AREAS };
+  try {
+    const [cs, opts] = await Promise.all([
+      loadCafes({ includeInactive: true }),
+      loadOptions().catch(() => ({ cafeCategories: CAFE_CATEGORIES, areas: AREAS }))
+    ]);
+    cafes = cs;
+    if ((opts.cafeCategories && opts.cafeCategories.length) || (opts.areas && opts.areas.length)) options = opts;
+  } catch (err) {
+    mount.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
+    return;
+  }
+
+  const formOpts = {
+    categories: options.cafeCategories && options.cafeCategories.length ? options.cafeCategories : CAFE_CATEGORIES,
+    areas: options.areas && options.areas.length ? options.areas : AREAS
+  };
+  const editing = editingId ? cafes.find((c) => c.id === editingId) : null;
+
+  mount.innerHTML = `
+    <section class="stack-4">
+      <div class="row-3" style="justify-content: space-between;">
+        <div>
+          <h2>카페 관리</h2>
+          <p class="text-soft fs-small">행을 클릭해서 수정. 새 카페는 아래 폼으로 추가.</p>
+        </div>
+        <span class="fs-small text-soft">총 ${cafes.length}개 (활성 ${cafes.filter((c) => c.active).length})</span>
+      </div>
+
+      <div id="rest-list" class="rest-list">
+        ${cafes.map((c) => restaurantRowHtml(c, c.id === editingId)).join('') || `<div class="state"><p>등록된 카페가 없습니다.</p></div>`}
+      </div>
+
+      <section class="card stack-4">
+        <div class="stack-3">
+          <h3>${editing ? `카페 수정 — ${escapeHtml(editing.name)}` : '새 카페 추가'}</h3>
+          ${editing ? '' : `<p class="text-soft fs-small">ID는 자동 부여됩니다. 이름은 필수.</p>`}
+        </div>
+        ${restaurantFormHtml(editing, { ...formOpts, nextId: nextCafeId(cafes) })}
+        <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
+          <div class="row-2">
+            ${editing ? `
+              <button type="button" class="btn btn-ghost" id="rf-cancel">취소</button>
+              <button type="button" class="btn btn-outline" id="rf-toggle-active">${editing.active ? '비활성화' : '활성화'}</button>
+              <button type="button" class="btn btn-ghost rf-danger" id="rf-delete">완전 삭제</button>
+            ` : ''}
+          </div>
+          <button type="button" class="btn btn-primary" id="rf-save">${editing ? '수정 저장' : '카페 추가'}</button>
+        </div>
+      </section>
+    </section>
+  `;
+
+  // 행 클릭 → 수정 모드
+  mount.querySelector('#rest-list')?.addEventListener('click', (e) => {
+    const row = e.target.closest('[data-restaurant-id]');
+    if (!row) return;
+    const cid = row.dataset.restaurantId;
+    renderCafesTab(mount, shellRoot, { editingId: editingId === cid ? null : cid });
+  });
+
+  if (editing) {
+    mount.querySelector('#rf-cancel').addEventListener('click', () => {
+      renderCafesTab(mount, shellRoot);
+    });
+    mount.querySelector('#rf-toggle-active').addEventListener('click', async () => {
+      try {
+        await setCafeActive({ adminKey: getStoredKey(), id: editing.id, active: !editing.active });
+        showToast(editing.active ? '비활성화되었습니다' : '활성화되었습니다');
+        renderCafesTab(mount, shellRoot, { editingId: editing.id });
+      } catch (err) {
+        handleAdminError(err, mount, shellRoot);
+      }
+    });
+    mount.querySelector('#rf-delete').addEventListener('click', async () => {
+      if (!confirm(`정말 "${editing.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
+      try {
+        await deleteCafe({ adminKey: getStoredKey(), id: editing.id });
+        showToast('삭제되었습니다');
+        renderCafesTab(mount, shellRoot);
+      } catch (err) {
+        handleAdminError(err, mount, shellRoot);
+      }
+    });
+  }
+
+  // 카테고리 select / direct input 토글
+  const categorySelect = mount.querySelector('#rf-category-select');
+  const categoryInput = mount.querySelector('#rf-category-input');
+  categorySelect.addEventListener('change', () => {
+    if (categorySelect.value === '__custom__') {
+      categoryInput.hidden = false;
+      categoryInput.focus();
+    } else {
+      categoryInput.hidden = true;
+      categoryInput.value = '';
+    }
+  });
+
+  // 지역 select / direct input 토글
+  const areaSelect = mount.querySelector('#rf-area-select');
+  const areaInput = mount.querySelector('#rf-area-input');
+  areaSelect.addEventListener('change', () => {
+    if (areaSelect.value === '__custom__') {
+      areaInput.hidden = false;
+      areaInput.focus();
+    } else {
+      areaInput.hidden = true;
+      areaInput.value = '';
+    }
+  });
+
+  // 메뉴 표 — 행 추가 / 삭제
+  mount.querySelector('#rf-menu-add')?.addEventListener('click', () => {
+    mount.querySelector('#rf-menu-rows').insertAdjacentHTML('beforeend', menuRowHtml({}));
+  });
+  mount.querySelector('#rf-menu-rows')?.addEventListener('click', (e) => {
+    const del = e.target.closest('.me-del');
+    if (del) del.closest('.menu-edit-row').remove();
+  });
+
+  // 썸네일 URL → 미리보기 라이브 갱신
+  const imageUrlInput = mount.querySelector('#rf-image-url');
+  const imagePreview = mount.querySelector('#rf-image-preview');
+  imageUrlInput?.addEventListener('input', () => {
+    const url = imageUrlInput.value.trim();
+    if (url) {
+      imagePreview.src = url;
+      imagePreview.hidden = false;
+    } else {
+      imagePreview.hidden = true;
+    }
+  });
+
+  mount.querySelector('#rf-save').addEventListener('click', async () => {
+    const id = (mount.querySelector('#rf-id').value || '').trim();
+    const name = (mount.querySelector('#rf-name').value || '').trim();
+    const category =
+      categorySelect.value === '__custom__'
+        ? (categoryInput.value || '').trim()
+        : categorySelect.value;
+    const area =
+      areaSelect.value === '__custom__'
+        ? (areaInput.value || '').trim()
+        : areaSelect.value;
+    const address = (mount.querySelector('#rf-address').value || '').trim();
+    const naverUrl = (mount.querySelector('#rf-naver-url').value || '').trim();
+    const imageUrl = (mount.querySelector('#rf-image-url').value || '').trim();
+    const walkingRaw = (mount.querySelector('#rf-walking').value || '').trim();
+    const walkingMinutes = walkingRaw === '' ? null : Number(walkingRaw);
+    const menuRows = [...mount.querySelectorAll('#rf-menu-rows .menu-edit-row')].map((row) => {
+      const priceRaw = (row.querySelector('.me-price').value || '').trim();
+      return {
+        name: row.querySelector('.me-name').value,
+        price: priceRaw === '' ? null : Number(priceRaw),
+        representative: row.querySelector('.me-rep').checked
+      };
+    });
+    const menusText = serializeMenus(menuRows);
+    const note = (mount.querySelector('#rf-note').value || '').trim();
+
+    if (!id || !name) {
+      showToast('이름은 필수입니다', { error: true });
+      return;
+    }
+    if (naverUrl && !/^https?:\/\//i.test(naverUrl)) {
+      showToast('네이버 링크는 http(s)://로 시작해야 합니다', { error: true });
+      return;
+    }
+    if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
+      showToast('썸네일 이미지 URL은 http(s)://로 시작해야 합니다', { error: true });
+      return;
+    }
+    if (walkingMinutes !== null && (isNaN(walkingMinutes) || walkingMinutes < 0)) {
+      showToast('도보 시간은 0 이상의 숫자여야 합니다', { error: true });
+      return;
+    }
+
+    try {
+      if (editing) {
+        await updateCafe({
+          adminKey: getStoredKey(),
+          id: editing.id,
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note }
+        });
+        showToast('수정되었습니다');
+        renderCafesTab(mount, shellRoot, { editingId: editing.id });
+      } else {
+        await createCafe({
+          adminKey: getStoredKey(),
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note
+        });
+        showToast('카페가 추가되었습니다');
+        renderCafesTab(mount, shellRoot, { editingId: id });
+      }
+    } catch (err) {
+      handleAdminError(err, mount, shellRoot);
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// 분류 관리 (카테고리·지역·카페 카테고리 옵션 CRUD)
 // ─────────────────────────────────────────────────────────
 async function renderOptionsTab(mount, shellRoot) {
   mount.innerHTML = `<div class="state"><p>분류 목록을 불러오는 중...</p></div>`;
@@ -1242,11 +1452,12 @@ async function renderOptionsTab(mount, shellRoot) {
     <section class="stack-4">
       <div>
         <h2>분류 관리</h2>
-        <p class="text-soft fs-small">카테고리·지역 항목을 추가·이름변경·삭제합니다. <strong>이름변경</strong> 시 그 값을 쓰던 기존 식당도 함께 바뀝니다. <strong>삭제</strong>는 목록에서만 빠지고 식당의 기존 값은 유지됩니다.</p>
+        <p class="text-soft fs-small">카테고리·지역·카페 카테고리 항목을 추가·이름변경·삭제합니다. <strong>이름변경</strong> 시 그 값을 쓰던 기존 식당·카페도 함께 바뀝니다. <strong>삭제</strong>는 목록에서만 빠지고 기존 값은 유지됩니다.</p>
       </div>
       <div class="opt-cols">
         ${optionPanelHtml('category', '카테고리', options.categories)}
         ${optionPanelHtml('area', '지역', options.areas)}
+        ${optionPanelHtml('cafe_category', '카페 카테고리', options.cafeCategories || [])}
       </div>
     </section>
   `;
@@ -1391,6 +1602,15 @@ function nextRestaurantId(restaurants) {
   return `R${String(max + 1).padStart(3, '0')}`;
 }
 
+function nextCafeId(cafes) {
+  let max = 0;
+  for (const c of cafes) {
+    const m = /^C(\d+)$/i.exec(c.id || '');
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `C${String(max + 1).padStart(3, '0')}`;
+}
+
 function restaurantFormHtml(r, opts = {}) {
   const v = r || {};
   const categories = opts.categories || CATEGORIES;
@@ -1407,7 +1627,7 @@ function restaurantFormHtml(r, opts = {}) {
           <div class="stack-3" style="flex: 1; min-width: 12rem;">
             <label class="field-label" for="rf-id">ID ${r ? '(수정 불가)' : '(자동 부여)'}</label>
             <input type="text" id="rf-id" class="input${r ? '' : ' input--plain'}" value="${escapeHtml(r ? (v.id || '') : (opts.nextId || ''))}" ${r ? 'disabled' : 'readonly'} placeholder="예: R006" />
-            ${r ? '' : `<p class="text-soft fs-small">기존 R번호 중 가장 큰 값 +1 로 자동 부여됩니다.</p>`}
+            ${r ? '' : `<p class="text-soft fs-small">기존 ID 중 가장 큰 번호 +1 로 자동 부여됩니다.</p>`}
           </div>
           <div class="stack-3" style="flex: 2; min-width: 16rem;">
             <label class="field-label" for="rf-name">이름 *</label>

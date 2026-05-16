@@ -42,6 +42,31 @@ function mapRestaurant(r) {
   };
 }
 
+export async function loadCafes({ includeInactive = false } = {}) {
+  let query = supabase.from('cafes').select('*').order('id');
+  if (!includeInactive) query = query.eq('active', true);
+  const { data, error } = await query;
+  if (error) throw new Error(`카페 로딩 실패: ${error.message}`);
+  return (data || []).map(mapCafe);
+}
+
+function mapCafe(c) {
+  return {
+    id: c.id,
+    name: c.name,
+    category: c.category || '',
+    area: c.area || '',
+    address: c.address || '',
+    naverUrl: c.naver_url || '',
+    imageUrl: c.image_url || '',
+    walkingMinutes: c.walking_minutes,
+    menusText: c.menus_text || '',
+    menus: parseMenusText(c.menus_text),
+    note: c.note || '',
+    active: !!c.active
+  };
+}
+
 export async function loadPolls() {
   const { data, error } = await supabase.from('polls').select('*').order('created_at', { ascending: false });
   if (error) throw new Error(`투표 로딩 실패: ${error.message}`);
@@ -277,6 +302,87 @@ export async function setRestaurantActive({ adminKey, id, active }) {
 }
 
 // ─────────────────────────────────────────────────────────
+// 카페 CRUD (관리자) — 식당 함수 미러, capacity_* 제외
+// ─────────────────────────────────────────────────────────
+export async function createCafe({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, active }) {
+  const { data, error } = await supabase.rpc('create_cafe', {
+    p_admin_key: adminKey || '',
+    p_id: id,
+    p_name: name,
+    p_category: category || null,
+    p_area: area || null,
+    p_address: address || null,
+    p_naver_url: naverUrl || null,
+    p_image_url: imageUrl || null,
+    p_walking_minutes: walkingMinutes ?? null,
+    p_menus_text: menusText || null,
+    p_note: note || null,
+    p_active: active !== false
+  });
+  if (error) throwTranslated(error);
+  return { ok: true, id: data };
+}
+
+export async function updateCafe({ adminKey, id, patch }) {
+  const params = {
+    p_admin_key: adminKey || '',
+    p_id: id,
+    p_name: null,
+    p_category: null,
+    p_area: null,
+    p_address: null,
+    p_naver_url: null,
+    p_image_url: null,
+    p_walking_minutes: null,
+    p_menus_text: null,
+    p_note: null,
+    p_active: null,
+    p_clear_naver_url: false,
+    p_clear_image_url: false
+  };
+  const p = patch || {};
+  if (p.name !== undefined) params.p_name = p.name;
+  if (p.category !== undefined) params.p_category = p.category;
+  if (p.area !== undefined) params.p_area = p.area;
+  if (p.address !== undefined) params.p_address = p.address;
+  if (p.naverUrl !== undefined) {
+    if (p.naverUrl === '') params.p_clear_naver_url = true;
+    else params.p_naver_url = p.naverUrl;
+  }
+  if (p.imageUrl !== undefined) {
+    if (p.imageUrl === '') params.p_clear_image_url = true;
+    else params.p_image_url = p.imageUrl;
+  }
+  if (p.walkingMinutes !== undefined) params.p_walking_minutes = p.walkingMinutes;
+  if (p.menusText !== undefined) params.p_menus_text = p.menusText;
+  if (p.note !== undefined) params.p_note = p.note;
+  if (p.active !== undefined) params.p_active = p.active;
+
+  const { error } = await supabase.rpc('update_cafe', params);
+  if (error) throwTranslated(error);
+  return { ok: true, id };
+}
+
+export async function deleteCafe({ adminKey, id }) {
+  const { error } = await supabase.rpc('delete_cafe', {
+    p_admin_key: adminKey || '',
+    p_id: id
+  });
+  if (error) throwTranslated(error);
+  return { ok: true };
+}
+
+export async function setCafeActive({ adminKey, id, active }) {
+  const { error } = await supabase.rpc('set_cafe_active', {
+    p_admin_key: adminKey || '',
+    p_id: id,
+    p_active: !!active
+  });
+  if (error) throwTranslated(error);
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────
 // 분류 옵션 (카테고리·지역) — 관리자 CRUD
 // ─────────────────────────────────────────────────────────
 export async function loadOptions() {
@@ -288,11 +394,13 @@ export async function loadOptions() {
   if (error) throw new Error(`분류 옵션 로딩 실패: ${error.message}`);
   const categories = [];
   const areas = [];
+  const cafeCategories = [];
   for (const row of data || []) {
     if (row.kind === 'category') categories.push(row.value);
     else if (row.kind === 'area') areas.push(row.value);
+    else if (row.kind === 'cafe_category') cafeCategories.push(row.value);
   }
-  return { categories, areas };
+  return { categories, areas, cafeCategories };
 }
 
 export async function createOption({ adminKey, kind, value }) {
@@ -379,6 +487,7 @@ function translateError(code) {
     case 'id_collision_exhausted':  return '같은 날짜에 너무 많은 투표가 생성되었습니다. 잠시 후 다시 시도해주세요.';
     case 'id_already_exists':       return '같은 ID의 식당이 이미 있습니다.';
     case 'restaurant_not_found':    return '존재하지 않는 식당입니다.';
+    case 'cafe_not_found':          return '존재하지 않는 카페입니다.';
     case 'option_already_exists':   return '같은 분류 항목이 이미 있습니다.';
     case 'option_not_found':        return '존재하지 않는 분류 항목입니다.';
     case 'invalid_kind':            return '분류 종류 값이 올바르지 않습니다.';
