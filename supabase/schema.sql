@@ -288,7 +288,17 @@ $$;
 --   delete_restaurant     — hard delete. 폴의 restaurant_ids에 남아있을 수 있어 클라이언트가 unknown id로 처리.
 --   set_restaurant_active — soft toggle (active true/false).
 -- ─────────────────────────────────────────────────────────
-drop function if exists public.create_restaurant(text,text,text,text,text,text,int,text,text,text,boolean);
+do $$
+declare r record;
+begin
+  for r in
+    select 'drop function if exists public.create_restaurant('
+           || pg_get_function_identity_arguments(p.oid) || ') cascade;' as cmd
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'create_restaurant'
+  loop execute r.cmd; end loop;
+end $$;
 create or replace function public.create_restaurant(
   p_admin_key       text,
   p_id              text,
@@ -340,7 +350,17 @@ begin
 end;
 $$;
 
-drop function if exists public.update_restaurant(text,text,text,text,text,text,int,text,text,text,boolean,boolean);
+do $$
+declare r record;
+begin
+  for r in
+    select 'drop function if exists public.update_restaurant('
+           || pg_get_function_identity_arguments(p.oid) || ') cascade;' as cmd
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'update_restaurant'
+  loop execute r.cmd; end loop;
+end $$;
 create or replace function public.update_restaurant(
   p_admin_key            text,
   p_id                   text,
@@ -481,7 +501,7 @@ end $$;
 grant execute on function public.submit_vote(text, text, text, text, text)                     to anon, authenticated;
 grant execute on function public.create_poll(text, text, text, date, time, timestamptz, text, text[])          to anon, authenticated;
 grant execute on function public.update_poll(text, text, text, text, date, time, timestamptz, text, boolean, text, text[]) to anon, authenticated;
-grant execute on function public.create_restaurant(text, text, text, text, text, text, int, text, text, text, boolean)     to anon, authenticated;
-grant execute on function public.update_restaurant(text, text, text, text, text, text, int, text, text, text, boolean, boolean) to anon, authenticated;
+grant execute on function public.create_restaurant(text, text, text, text, text, text, int, int, int, text, text, boolean)     to anon, authenticated;
+grant execute on function public.update_restaurant(text, text, text, text, text, text, int, int, int, text, text, boolean, boolean, boolean, boolean) to anon, authenticated;
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;
