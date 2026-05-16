@@ -44,22 +44,37 @@ export function formatRemaining(deadlineText, now = new Date()) {
 }
 
 /**
+ * 마감까지 남은 시간을 자릿수 단위로 분해.
+ * 파싱 실패 또는 마감(diff<=0)이면 expired:true, 나머지 0.
+ */
+export function clockParts(deadlineText, now = new Date()) {
+  const d = parseDeadline(deadlineText);
+  if (!d) return { expired: true, days: 0, h: 0, m: 0, s: 0 };
+  const diff = d.getTime() - now.getTime();
+  if (diff <= 0) return { expired: true, days: 0, h: 0, m: 0, s: 0 };
+
+  const sec = Math.floor(diff / 1000);
+  return {
+    expired: false,
+    days: Math.floor(sec / 86400),
+    h: Math.floor((sec % 86400) / 3600),
+    m: Math.floor((sec % 3600) / 60),
+    s: sec % 60
+  };
+}
+
+/**
  * 디지털 시계 스타일: "4일 22:35:12" 또는 "05:30:12". 음수면 "마감됨".
  */
 export function formatClock(deadlineText, now = new Date()) {
   const d = parseDeadline(deadlineText);
   if (!d) return '';
-  const diff = d.getTime() - now.getTime();
-  if (diff <= 0) return '마감됨';
+  const p = clockParts(deadlineText, now);
+  if (p.expired) return '마감됨';
 
-  const sec = Math.floor(diff / 1000);
-  const days = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
   const pad = (n) => String(n).padStart(2, '0');
-  const clock = `${pad(h)}:${pad(m)}:${pad(s)}`;
-  return days > 0 ? `${days}일 ${clock}` : clock;
+  const clock = `${pad(p.h)}:${pad(p.m)}:${pad(p.s)}`;
+  return p.days > 0 ? `${p.days}일 ${clock}` : clock;
 }
 
 /**
@@ -72,9 +87,37 @@ export function withinGracePeriod(deadlineText, graceDays = 3, now = new Date())
   return diffMs >= 0 && diffMs <= graceDays * 86400 * 1000;
 }
 
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+/**
+ * "YYYY-MM-DD..." 에서 한국어 요일 한 글자. 로컬 기준(타임존 오프셋 회피).
+ */
+export function weekdayKo(dateText) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateText || '').trim());
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d.getTime()) ? '' : WEEKDAYS[d.getDay()];
+}
+
 export function formatEventDateTime(dateText, timeText) {
   const datePart = (dateText || '').trim();
   const timePart = (timeText || '').trim();
   if (!datePart) return '';
-  return timePart ? `${datePart} ${timePart}` : datePart;
+  const wd = weekdayKo(datePart);
+  const dateStr = wd ? `${datePart} (${wd})` : datePart;
+  return timePart ? `${dateStr} ${timePart}` : dateStr;
+}
+
+/**
+ * 마감 절대 일시를 우측 패널용으로 분해. 파싱 실패면 null.
+ * { date: "M/D (요일)", time: "HH:mm" }
+ */
+export function formatDeadlineParts(deadlineText) {
+  const d = parseDeadline(deadlineText);
+  if (!d) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return {
+    date: `${d.getMonth() + 1}/${d.getDate()} (${WEEKDAYS[d.getDay()]})`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  };
 }

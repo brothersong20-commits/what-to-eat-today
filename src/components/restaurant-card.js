@@ -20,17 +20,24 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
   const menus = (r.menus || [])
     .map(
       (m) =>
-        `<li class="menu-row">
-          <span class="menu-name">${escapeHtml(m.name)}</span>
+        `<li class="menu-row ${m.representative ? 'is-rep' : ''}">
+          <span class="menu-name">${m.representative ? '⭐ ' : ''}${escapeHtml(m.name)}</span>
           ${m.price ? `<span class="menu-price">${escapeHtml(formatPrice(m.price))}</span>` : ''}
         </li>`
     )
     .join('');
 
+  const capacityText = [
+    r.capacityRoom != null && `룸 ${r.capacityRoom}명`,
+    r.capacityHall != null && `홀 ${r.capacityHall}명`
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   const meta = [
     r.category && `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>`,
     r.walkingMinutes != null && `<span class="rc-meta">🚶 도보 ${r.walkingMinutes}분</span>`,
-    r.capacity && `<span class="rc-meta">🪑 ${escapeHtml(r.capacity)}</span>`
+    capacityText && `<span class="rc-meta">🪑 ${escapeHtml(capacityText)}</span>`
   ]
     .filter(Boolean)
     .join('');

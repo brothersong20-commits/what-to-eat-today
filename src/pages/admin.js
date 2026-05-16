@@ -1,5 +1,6 @@
 import { createPoll, updatePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive } from '../lib/supabase.js';
 import { CATEGORIES } from '../lib/config.js';
+import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
 import { tally } from '../lib/tally.js';
@@ -1006,6 +1007,15 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
     }
   });
 
+  // 메뉴 표 — 행 추가 / 삭제
+  mount.querySelector('#rf-menu-add')?.addEventListener('click', () => {
+    mount.querySelector('#rf-menu-rows').insertAdjacentHTML('beforeend', menuRowHtml({}));
+  });
+  mount.querySelector('#rf-menu-rows')?.addEventListener('click', (e) => {
+    const del = e.target.closest('.me-del');
+    if (del) del.closest('.menu-edit-row').remove();
+  });
+
   mount.querySelector('#rf-save').addEventListener('click', async () => {
     const id = (mount.querySelector('#rf-id').value || '').trim();
     const name = (mount.querySelector('#rf-name').value || '').trim();
@@ -1017,8 +1027,19 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
     const naverUrl = (mount.querySelector('#rf-naver-url').value || '').trim();
     const walkingRaw = (mount.querySelector('#rf-walking').value || '').trim();
     const walkingMinutes = walkingRaw === '' ? null : Number(walkingRaw);
-    const capacity = (mount.querySelector('#rf-capacity').value || '').trim();
-    const menusText = (mount.querySelector('#rf-menus').value || '').trim();
+    const roomRaw = (mount.querySelector('#rf-capacity-room').value || '').trim();
+    const hallRaw = (mount.querySelector('#rf-capacity-hall').value || '').trim();
+    const capacityRoom = roomRaw === '' ? null : Number(roomRaw);
+    const capacityHall = hallRaw === '' ? null : Number(hallRaw);
+    const menuRows = [...mount.querySelectorAll('#rf-menu-rows .menu-edit-row')].map((row) => {
+      const priceRaw = (row.querySelector('.me-price').value || '').trim();
+      return {
+        name: row.querySelector('.me-name').value,
+        price: priceRaw === '' ? null : Number(priceRaw),
+        representative: row.querySelector('.me-rep').checked
+      };
+    });
+    const menusText = serializeMenus(menuRows);
     const note = (mount.querySelector('#rf-note').value || '').trim();
 
     if (!id || !name) {
@@ -1033,20 +1054,27 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
       showToast('도보 시간은 0 이상의 숫자여야 합니다', { error: true });
       return;
     }
+    if (
+      (capacityRoom !== null && (isNaN(capacityRoom) || capacityRoom < 0)) ||
+      (capacityHall !== null && (isNaN(capacityHall) || capacityHall < 0))
+    ) {
+      showToast('수용 인원은 0 이상의 숫자여야 합니다', { error: true });
+      return;
+    }
 
     try {
       if (editing) {
         await updateRestaurant({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, address, naverUrl, walkingMinutes, capacity, menusText, note }
+          patch: { name, category, address, naverUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note }
         });
         showToast('수정되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createRestaurant({
           adminKey: getStoredKey(),
-          id, name, category, address, naverUrl, walkingMinutes, capacity, menusText, note
+          id, name, category, address, naverUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note
         });
         showToast('식당이 추가되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: id });
@@ -1112,14 +1140,27 @@ function restaurantFormHtml(r) {
         <input type="url" id="rf-naver-url" class="input" value="${escapeHtml(v.naverUrl || '')}" placeholder="https://naver.me/..." />
       </div>
 
-      <div class="stack-3">
-        <label class="field-label" for="rf-capacity">수용 인원</label>
-        <input type="text" id="rf-capacity" class="input" value="${escapeHtml(v.capacity || '')}" placeholder="룸 4~12인 / 단체 30명" />
+      <div class="row-2" style="flex-wrap: wrap; gap: var(--space-3);">
+        <div class="stack-3" style="flex: 1; min-width: 12rem;">
+          <label class="field-label" for="rf-capacity-room">룸 수용 인원 (명)</label>
+          <input type="number" id="rf-capacity-room" class="input" min="0" value="${v.capacityRoom != null ? v.capacityRoom : ''}" placeholder="예: 12" />
+        </div>
+        <div class="stack-3" style="flex: 1; min-width: 12rem;">
+          <label class="field-label" for="rf-capacity-hall">홀 수용 인원 (명)</label>
+          <input type="number" id="rf-capacity-hall" class="input" min="0" value="${v.capacityHall != null ? v.capacityHall : ''}" placeholder="예: 30" />
+        </div>
       </div>
 
       <div class="stack-3">
-        <label class="field-label" for="rf-menus">메뉴 (이름(가격)/이름(가격) 형식)</label>
-        <textarea id="rf-menus" class="input" rows="2" style="height: auto; padding: 1rem 1.4rem; resize: vertical;" placeholder="한우갈비살(45000)/평양냉면(12000)">${escapeHtml(v.menusText || '')}</textarea>
+        <label class="field-label">메뉴</label>
+        <p class="text-soft fs-small">이름·가격을 각 칸에 입력. 대표 메뉴는 ⭐ 체크 (여러 개 가능).</p>
+        <div class="menu-edit-head">
+          <span>대표</span><span>이름</span><span>가격(원)</span><span></span>
+        </div>
+        <div id="rf-menu-rows" class="stack-2">
+          ${(v.menus && v.menus.length ? v.menus : [{}]).map((m) => menuRowHtml(m)).join('')}
+        </div>
+        <button type="button" class="btn btn-outline" id="rf-menu-add" style="align-self: flex-start;">+ 메뉴 행 추가</button>
       </div>
 
       <div class="stack-3">
@@ -1127,6 +1168,20 @@ function restaurantFormHtml(r) {
         <textarea id="rf-note" class="input" rows="2" maxlength="200" style="height: auto; padding: 1rem 1.4rem; resize: vertical;" placeholder="주차 가능, 예약 필수 등">${escapeHtml(v.note || '')}</textarea>
       </div>
     </form>
+  `;
+}
+
+function menuRowHtml(m) {
+  const v = m || {};
+  return `
+    <div class="menu-edit-row">
+      <label class="menu-edit-rep">
+        <input type="checkbox" class="me-rep" ${v.representative ? 'checked' : ''} aria-label="대표 메뉴" />
+      </label>
+      <input type="text" class="input me-name" value="${escapeHtml(v.name || '')}" placeholder="메뉴 이름" />
+      <input type="number" class="input me-price" min="0" value="${v.price != null ? v.price : ''}" placeholder="가격" />
+      <button type="button" class="btn btn-ghost rf-danger me-del" aria-label="행 삭제">✕</button>
+    </div>
   `;
 }
 

@@ -31,7 +31,8 @@ function mapRestaurant(r) {
     address: r.address || '',
     naverUrl: r.naver_url || '',
     walkingMinutes: r.walking_minutes,
-    capacity: r.capacity || '',
+    capacityRoom: r.capacity_room ?? null,
+    capacityHall: r.capacity_hall ?? null,
     menusText: r.menus_text || '',
     menus: parseMenusText(r.menus_text),
     note: r.note || '',
@@ -172,7 +173,7 @@ export async function updatePoll({ adminKey, pollId, patch }) {
 // ─────────────────────────────────────────────────────────
 // 식당 CRUD (관리자)
 // ─────────────────────────────────────────────────────────
-export async function createRestaurant({ adminKey, id, name, category, address, naverUrl, walkingMinutes, capacity, menusText, note, active }) {
+export async function createRestaurant({ adminKey, id, name, category, address, naverUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, active }) {
   const { data, error } = await supabase.rpc('create_restaurant', {
     p_admin_key: adminKey || '',
     p_id: id,
@@ -181,7 +182,8 @@ export async function createRestaurant({ adminKey, id, name, category, address, 
     p_address: address || null,
     p_naver_url: naverUrl || null,
     p_walking_minutes: walkingMinutes ?? null,
-    p_capacity: capacity || null,
+    p_capacity_room: capacityRoom ?? null,
+    p_capacity_hall: capacityHall ?? null,
     p_menus_text: menusText || null,
     p_note: note || null,
     p_active: active !== false
@@ -199,11 +201,14 @@ export async function updateRestaurant({ adminKey, id, patch }) {
     p_address: null,
     p_naver_url: null,
     p_walking_minutes: null,
-    p_capacity: null,
+    p_capacity_room: null,
+    p_capacity_hall: null,
     p_menus_text: null,
     p_note: null,
     p_active: null,
-    p_clear_naver_url: false
+    p_clear_naver_url: false,
+    p_clear_capacity_room: false,
+    p_clear_capacity_hall: false
   };
   const p = patch || {};
   if (p.name !== undefined) params.p_name = p.name;
@@ -214,7 +219,14 @@ export async function updateRestaurant({ adminKey, id, patch }) {
     else params.p_naver_url = p.naverUrl;
   }
   if (p.walkingMinutes !== undefined) params.p_walking_minutes = p.walkingMinutes;
-  if (p.capacity !== undefined) params.p_capacity = p.capacity;
+  if (p.capacityRoom !== undefined) {
+    if (p.capacityRoom == null) params.p_clear_capacity_room = true;
+    else params.p_capacity_room = p.capacityRoom;
+  }
+  if (p.capacityHall !== undefined) {
+    if (p.capacityHall == null) params.p_clear_capacity_hall = true;
+    else params.p_capacity_hall = p.capacityHall;
+  }
   if (p.menusText !== undefined) params.p_menus_text = p.menusText;
   if (p.note !== undefined) params.p_note = p.note;
   if (p.active !== undefined) params.p_active = p.active;

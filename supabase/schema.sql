@@ -40,6 +40,8 @@ create table if not exists public.restaurants (
 
 -- 이미 존재하던 테이블에 새 컬럼 멱등 추가
 alter table public.restaurants add column if not exists naver_url text;
+alter table public.restaurants add column if not exists capacity_room int;
+alter table public.restaurants add column if not exists capacity_hall int;
 
 create table if not exists public.polls (
   id                     text primary key,
@@ -286,6 +288,7 @@ $$;
 --   delete_restaurant     — hard delete. 폴의 restaurant_ids에 남아있을 수 있어 클라이언트가 unknown id로 처리.
 --   set_restaurant_active — soft toggle (active true/false).
 -- ─────────────────────────────────────────────────────────
+drop function if exists public.create_restaurant(text,text,text,text,text,text,int,text,text,text,boolean);
 create or replace function public.create_restaurant(
   p_admin_key       text,
   p_id              text,
@@ -294,7 +297,8 @@ create or replace function public.create_restaurant(
   p_address         text default null,
   p_naver_url       text default null,
   p_walking_minutes int default null,
-  p_capacity        text default null,
+  p_capacity_room   int default null,
+  p_capacity_hall   int default null,
   p_menus_text      text default null,
   p_note            text default null,
   p_active          boolean default true
@@ -318,14 +322,15 @@ begin
   end if;
 
   insert into public.restaurants (
-    id, name, category, address, naver_url, walking_minutes, capacity, menus_text, note, active
+    id, name, category, address, naver_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, active
   ) values (
     btrim(p_id), btrim(p_name),
     nullif(btrim(coalesce(p_category, '')), ''),
     nullif(btrim(coalesce(p_address, '')), ''),
     nullif(btrim(coalesce(p_naver_url, '')), ''),
     p_walking_minutes,
-    nullif(btrim(coalesce(p_capacity, '')), ''),
+    p_capacity_room,
+    p_capacity_hall,
     nullif(btrim(coalesce(p_menus_text, '')), ''),
     nullif(btrim(coalesce(p_note, '')), ''),
     coalesce(p_active, true)
@@ -335,19 +340,23 @@ begin
 end;
 $$;
 
+drop function if exists public.update_restaurant(text,text,text,text,text,text,int,text,text,text,boolean,boolean);
 create or replace function public.update_restaurant(
-  p_admin_key       text,
-  p_id              text,
-  p_name            text default null,
-  p_category        text default null,
-  p_address         text default null,
-  p_naver_url       text default null,
-  p_walking_minutes int default null,
-  p_capacity        text default null,
-  p_menus_text      text default null,
-  p_note            text default null,
-  p_active          boolean default null,
-  p_clear_naver_url boolean default false
+  p_admin_key            text,
+  p_id                   text,
+  p_name                 text default null,
+  p_category             text default null,
+  p_address              text default null,
+  p_naver_url            text default null,
+  p_walking_minutes      int default null,
+  p_capacity_room        int default null,
+  p_capacity_hall        int default null,
+  p_menus_text           text default null,
+  p_note                 text default null,
+  p_active               boolean default null,
+  p_clear_naver_url      boolean default false,
+  p_clear_capacity_room  boolean default false,
+  p_clear_capacity_hall  boolean default false
 ) returns void
 language plpgsql
 security definer
@@ -374,7 +383,16 @@ begin
                           else naver_url
                         end,
       walking_minutes = coalesce(p_walking_minutes, walking_minutes),
-      capacity        = coalesce(nullif(btrim(p_capacity), ''),   capacity),
+      capacity_room   = case
+                          when p_clear_capacity_room then null
+                          when p_capacity_room is not null then p_capacity_room
+                          else capacity_room
+                        end,
+      capacity_hall   = case
+                          when p_clear_capacity_hall then null
+                          when p_capacity_hall is not null then p_capacity_hall
+                          else capacity_hall
+                        end,
       menus_text      = coalesce(nullif(btrim(p_menus_text), ''), menus_text),
       note            = coalesce(nullif(btrim(p_note), ''),       note),
       active          = coalesce(p_active, active)

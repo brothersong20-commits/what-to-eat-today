@@ -1,7 +1,14 @@
 import { loadRestaurants, loadPolls } from '../lib/supabase.js';
-import { isPastDeadline, formatClock, withinGracePeriod, formatEventDateTime } from '../lib/time.js';
+import {
+  isPastDeadline,
+  clockParts,
+  withinGracePeriod,
+  formatEventDateTime,
+  formatDeadlineParts
+} from '../lib/time.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
+import { flipClockHtml, updateFlipClock } from '../components/flip-clock.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -64,10 +71,10 @@ export async function renderHome(app) {
       function tickPollCountdowns() {
         pollsListEl.querySelectorAll('.poll-item').forEach((card) => {
           const deadline = card.dataset.deadline;
-          const clockEl = card.querySelector('.poll-item-deadline-clock');
-          if (!clockEl) return;
-          clockEl.textContent = formatClock(deadline);
           card.classList.toggle('is-expired', isPastDeadline(deadline));
+          const clockEl = card.querySelector('[data-deadline-clock]');
+          if (!clockEl) return;
+          updateFlipClock(clockEl, clockParts(deadline));
         });
       }
       tickPollCountdowns();
@@ -115,18 +122,24 @@ export async function renderHome(app) {
 function renderPollItem(p) {
   const eventStr = formatEventDateTime(p.eventDate, p.eventTime);
   const expired = isPastDeadline(p.deadline);
+  const dl = formatDeadlineParts(p.deadline);
+  const deadlineAt = dl
+    ? `<span class="poll-item-deadline-at">마감 ${escapeHtml(dl.date)} ${escapeHtml(dl.time)}</span>`
+    : '';
   return `
-    <a class="poll-item ${expired ? 'is-expired' : ''}"
+    <a class="poll-item poll-item--countdown ${expired ? 'is-expired' : ''}"
        href="#/vote/${encodeURIComponent(p.id)}"
        data-deadline="${escapeHtml(p.deadline || '')}">
-      <div class="poll-item-title">${escapeHtml(p.title)}</div>
-      <div class="poll-item-meta">
-        ${p.mealType ? `<span>🍽 ${escapeHtml(p.mealType)}</span>` : ''}
-        ${eventStr ? `<span>📅 ${escapeHtml(eventStr)}</span>` : ''}
+      <div class="poll-item-main">
+        <div class="poll-item-title">${escapeHtml(p.title)}</div>
+        <div class="poll-item-meta">
+          ${p.mealType ? `<span>🍽 ${escapeHtml(p.mealType)}</span>` : ''}
+          ${eventStr ? `<span>📅 ${escapeHtml(eventStr)}</span>` : ''}
+        </div>
       </div>
-      <div class="poll-item-deadline">
-        <span class="poll-item-deadline-label">⏰ 마감까지</span>
-        <span class="poll-item-deadline-clock">${escapeHtml(formatClock(p.deadline))}</span>
+      <div class="poll-item-aside">
+        ${flipClockHtml({ parts: clockParts(p.deadline), size: 'sm' })}
+        ${deadlineAt}
       </div>
     </a>
   `;

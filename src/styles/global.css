@@ -407,28 +407,55 @@ textarea {
   color: var(--text-soft);
 }
 .poll-item-deadline {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-1);
   font-weight: 700;
   color: var(--green-accent);
-}
-.poll-item-deadline-label {
-  font-size: 1.3rem;
-}
-.poll-item-deadline-clock {
-  font-size: 2.0rem;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
 }
 .poll-item.is-expired {
   opacity: 0.55;
 }
-.poll-item.is-expired .poll-item-deadline {
+.poll-item.is-expired .flip-clock__label {
+  display: none;
+}
+
+/* 홈 "투표 중인 회식" — 좌측 본문 / 우측 플립시계 2열, 활성 강조 */
+.poll-item--countdown {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  background: var(--poll-active-bg);
+  border-color: var(--poll-active-border);
+  border-left: 4px solid var(--poll-active-bar);
+  padding-left: calc(var(--space-3) - 3px);
+}
+.poll-item--countdown:hover {
+  border-color: var(--green-accent);
+  box-shadow: var(--shadow-float);
+}
+.poll-item-main {
+  flex: 1 1 60%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.poll-item-aside {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  text-align: right;
+}
+.poll-item-deadline-at {
+  font-size: 1.2rem;
+  font-weight: 600;
   color: var(--text-soft);
 }
-.poll-item.is-expired .poll-item-deadline-label {
-  display: none;
+.poll-item.is-expired .poll-item-deadline-at {
+  color: var(--danger);
 }
 
 /* ───── Restaurant card ───── */
@@ -558,6 +585,10 @@ textarea {
   padding: 0.4rem 0;
   font-size: 1.4rem;
 }
+.menu-row.is-rep .menu-name {
+  font-weight: 700;
+  color: var(--green-starbucks);
+}
 .menu-price {
   color: var(--text-soft);
   font-variant-numeric: tabular-nums;
@@ -637,23 +668,170 @@ textarea {
   color: var(--text-on-dark-soft);
 }
 .vote-countdown {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
   font-weight: 700;
   color: #fff;
 }
-.vote-countdown-label {
-  font-size: 1.6rem;
+
+/* ───── Flip clock (split-flap scoreboard) ───── */
+.flip-clock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
 }
-.vote-countdown-clock {
-  font-size: 2.8rem;
+.flip-clock--lg {
+  --flip-digit-w: var(--flip-digit-w-lg);
+  --flip-digit-h: var(--flip-digit-h-lg);
+  --flip-digit-font: var(--flip-font-lg);
+}
+.flip-clock--sm {
+  --flip-digit-w: var(--flip-digit-w-sm);
+  --flip-digit-h: var(--flip-digit-h-sm);
+  --flip-digit-font: var(--flip-font-sm);
+}
+.flip-clock__label {
+  font-size: 1.5rem;
+  color: currentColor;
+}
+.flip-clock--sm .flip-clock__label {
+  font-size: 1.3rem;
+}
+.flip-clock__groups {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.flip-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.flip-group--days[hidden] {
+  display: none;
+}
+.flip-group__digits {
+  display: flex;
+  gap: 0.4rem;
+}
+.flip-group__cap {
+  color: currentColor;
+  font-size: calc(var(--flip-digit-font) * 0.42);
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.7;
+}
+.flip-group--days .flip-digit {
+  --flip-card-bg: var(--flip-days-bg);
+  --flip-card-bg-2: var(--flip-days-bg-2);
+}
+.flip-group--hours .flip-digit {
+  --flip-card-bg: var(--flip-hours-bg);
+  --flip-card-bg-2: var(--flip-hours-bg-2);
+}
+.flip-group--mins .flip-digit {
+  --flip-card-bg: var(--flip-mins-bg);
+  --flip-card-bg-2: var(--flip-mins-bg-2);
+}
+.flip-group--secs .flip-digit {
+  --flip-card-bg: var(--flip-secs-bg);
+  --flip-card-bg-2: var(--flip-secs-bg-2);
+}
+
+.flip-digit {
+  position: relative;
+  display: inline-block;
+  width: var(--flip-digit-w);
+  height: var(--flip-digit-h);
+  border-radius: var(--flip-radius);
+  box-shadow: var(--flip-shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  background: var(--flip-card-bg);
+  perspective: 240px;
+}
+.flip-digit__top,
+.flip-digit__bottom,
+.flip-digit__fold {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  font-size: var(--flip-digit-font);
+  font-weight: 700;
+  line-height: var(--flip-digit-h);
+  color: var(--flip-digit-color);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
+  backface-visibility: hidden;
 }
-.vote-countdown.is-expired .vote-countdown-clock {
+.flip-digit__top,
+.flip-digit__fold--front {
+  top: 0;
+  align-items: flex-start;
+  border-radius: var(--flip-radius) var(--flip-radius) 0 0;
+  background: var(--flip-card-bg);
+  border-bottom: 1px solid var(--flip-divider);
+}
+.flip-digit__bottom,
+.flip-digit__fold--back {
+  bottom: 0;
+  align-items: flex-end;
+  border-radius: 0 0 var(--flip-radius) var(--flip-radius);
+  background: var(--flip-card-bg-2);
+}
+.flip-digit__fold--front {
+  transform-origin: center bottom;
+  transform: rotateX(0deg);
+  z-index: 2;
+}
+.flip-digit__fold--back {
+  transform-origin: center top;
+  transform: rotateX(90deg);
+  z-index: 2;
+}
+.flip-digit.is-flipping .flip-digit__fold--front {
+  animation: flip-top-down calc(var(--flip-duration) / 2) var(--flip-ease) forwards;
+}
+.flip-digit.is-flipping .flip-digit__fold--back {
+  animation: flip-bottom-up var(--flip-duration) var(--flip-ease) forwards;
+}
+
+@keyframes flip-top-down {
+  0% {
+    transform: rotateX(0deg);
+  }
+  100% {
+    transform: rotateX(-90deg);
+  }
+}
+@keyframes flip-bottom-up {
+  0%,
+  50% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+.flip-clock__expired {
+  display: none;
   font-size: 1.8rem;
-  letter-spacing: 0;
+  color: currentColor;
+}
+.flip-clock.is-expired .flip-clock__groups {
+  display: none;
+}
+.flip-clock.is-expired .flip-clock__expired {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flip-digit.is-flipping .flip-digit__fold--front,
+  .flip-digit.is-flipping .flip-digit__fold--back {
+    animation: none;
+  }
 }
 
 .attendance-row {
@@ -1179,4 +1357,37 @@ textarea {
 }
 .rf-danger:hover:not(:disabled) {
   background: var(--danger-tint);
+}
+
+/* ───── 메뉴 표 입력 (식당 관리) ───── */
+.menu-edit-head,
+.menu-edit-row {
+  display: grid;
+  grid-template-columns: 4rem 1fr 11rem 4rem;
+  gap: var(--space-2);
+  align-items: center;
+}
+.menu-edit-head {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  padding: 0 0.4rem;
+}
+.menu-edit-head span:first-child,
+.menu-edit-rep {
+  text-align: center;
+  justify-items: center;
+}
+.menu-edit-rep {
+  display: grid;
+}
+.menu-edit-rep input {
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+  accent-color: var(--green-accent);
+}
+.menu-edit-row .me-del {
+  padding: 0;
+  height: 4.4rem;
 }

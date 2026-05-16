@@ -81,3 +81,48 @@ npm run preview  # 빌드 결과 로컬 미리보기
 - **시드 데이터**: 빈 시작용 더미가 필요하면 `supabase/seed.sql` 실행.
 - **ADMIN_KEY 변경**: `update private.app_config set value = '...' where key = 'admin_key';` 실행 + `.env.local`의 `VITE_ADMIN_KEY` 동기화.
 - **Realtime 동작 확인**: `supabase_realtime` publication에 `public.votes`가 포함돼 있어야 한다. `schema.sql`이 자동 추가하지만, 새 테이블의 변경도 구독하려면 publication에 add 필요.
+
+## Git 커밋 규칙
+
+이 저장소의 커밋은 아래 규칙을 **반드시** 따른다. (기존 커밋 4개에서 확립된 컨벤션 — 이탈 금지)
+
+- **언어**: 제목·본문 전부 한국어. 영문 커밋 메시지 금지.
+
+- **커밋 시점**: 사용자가 명시적으로 커밋을 요청할 때만 커밋한다. 코드 변경 후 자동으로 커밋하지 않는다.
+
+- **제목 줄 (subject)**:
+  - 모든 릴리스(major·minor 무관)는 `Phase X.Y (vX.Y): 요약` 형식으로 통일한다. X=Phase 단위 major, Y=소수점 minor. `vN.M:`이나 `Phase N (vN.M):` 같은 변형은 쓰지 않는다.
+    예) `Phase 1.0 (v1.0): 초기 릴리스 ...`, `Phase 1.1 (v1.1): 관리자 폴 생성 ...`, `Phase 2.0 (v2.0): Supabase 마이그레이션 ...`, `Phase 2.1 (v2.1): 식당 카테고리 색상 ...`
+  - 요약은 여러 변경을 ` · `(공백+가운뎃점+공백)로 구분.
+  - 버전이 올라가지 않는 작업도 그 다음 minor 릴리스로 간주해 `Phase X.Y (vX.Y):`를 붙이고 `package.json` bump + `vX.Y` 태그를 함께 만든다 (별도 무버전 커밋을 남기지 않는다).
+  - 버전 체계는 우하단 버전 뱃지/`package.json` 참조 — Phase 단위 major + 소수점 minor.
+
+- **본문 (body)**: 변경이 여러 영역에 걸치면 `[그룹명]` 대괄호 헤더로 묶고 그 아래 `-` 불릿. 무엇을·왜를 간결하게. 변경이 단순하면 짧은 불릿 몇 줄로 충분.
+
+- **트레일러**: 모든 커밋 본문 마지막에 빈 줄 후 정확히 아래 한 줄을 붙인다.
+  ```
+  Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+  ```
+
+- **작성자/설정**: author 는 기존 git config(`brothersong20 <brothersong20@gmail.com>`) 그대로. `git config`를 수정하지 않는다.
+
+- **amend 금지**: 항상 새 커밋을 만든다. 사용자가 명시적으로 amend를 요청한 경우에만 예외.
+
+- **릴리스 절차**: 모든 커밋은 곧 릴리스다. `package.json` 버전을 `X.Y`로 bump하는 변경을 커밋에 포함하고, 커밋 후 `vX.Y` 태그를 찍는다. push 는 `git push` + `git push --tags`. origin upstream 은 이미 설정돼 있어 `git push`로 충분.
+
+- **푸시**: 사용자가 푸시를 요청하지 않으면 푸시하지 않는다.
+
+본문 작성 예시:
+
+```
+Phase 1.1 (v1.1): 관리자 폴 생성 페이지 · 폴별 식당 후보 선택 · 홈 헤더 개편
+
+[관리자]
+- /#/admin 라우트와 관리자 인증 이중 검증
+- 폴 생성 시 식당 후보 다중 선택
+
+[홈]
+- 헤더 재정렬, 진행중 폴 섹션 추가
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+```

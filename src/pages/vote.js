@@ -1,7 +1,8 @@
 import { loadRestaurants, loadPoll, submitVote } from '../lib/supabase.js';
-import { isPastDeadline, formatClock, formatEventDateTime } from '../lib/time.js';
+import { isPastDeadline, clockParts, formatEventDateTime } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
+import { flipClockHtml, updateFlipClock } from '../components/flip-clock.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
 import { navigate } from '../lib/router.js';
@@ -80,9 +81,8 @@ export async function renderVote(app, { id: pollId }) {
         <span>🍽 ${escapeHtml(poll.mealType || '회식')}</span>
         <span>📅 ${escapeHtml(formatEventDateTime(poll.eventDate, poll.eventTime))}</span>
       </div>
-      <div class="vote-countdown" id="countdown">
-        <span class="vote-countdown-label">⏰ 마감까지</span>
-        <span class="vote-countdown-clock">--:--:--</span>
+      <div id="countdown">
+        ${flipClockHtml({ parts: clockParts(poll.deadline), size: 'lg' })}
       </div>
       ${poll.description ? `<p>${escapeHtml(poll.description)}</p>` : ''}
     </section>
@@ -137,17 +137,11 @@ export async function renderVote(app, { id: pollId }) {
 
   // ─── countdown ─────────────────────────────────────────
   const countdownEl = root.querySelector('#countdown');
-  const labelEl = countdownEl.querySelector('.vote-countdown-label');
-  const clockEl = countdownEl.querySelector('.vote-countdown-clock');
+  const clockEl = countdownEl.querySelector('[data-deadline-clock]');
   function tickCountdown() {
-    if (isPastDeadline(poll.deadline)) {
-      labelEl.textContent = '⏰';
-      clockEl.textContent = '마감되었습니다';
-      countdownEl.classList.add('is-expired');
-      return false;
-    }
-    clockEl.textContent = formatClock(poll.deadline);
-    return true;
+    const parts = clockParts(poll.deadline);
+    updateFlipClock(clockEl, parts);
+    return !parts.expired;
   }
   tickCountdown();
   const tickHandle = setInterval(() => {
