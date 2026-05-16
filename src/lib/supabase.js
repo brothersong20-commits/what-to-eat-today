@@ -38,6 +38,7 @@ function mapRestaurant(r) {
     menusText: r.menus_text || '',
     menus: parseMenusText(r.menus_text),
     note: r.note || '',
+    businessHours: r.business_hours || '',
     active: !!r.active
   };
 }
@@ -63,6 +64,7 @@ function mapCafe(c) {
     menusText: c.menus_text || '',
     menus: parseMenusText(c.menus_text),
     note: c.note || '',
+    businessHours: c.business_hours || '',
     active: !!c.active
   };
 }
@@ -200,7 +202,7 @@ export async function updatePoll({ adminKey, pollId, patch }) {
 // ─────────────────────────────────────────────────────────
 // 식당 CRUD (관리자)
 // ─────────────────────────────────────────────────────────
-export async function createRestaurant({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, active }) {
+export async function createRestaurant({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, businessHours, active }) {
   const { data, error } = await supabase.rpc('create_restaurant', {
     p_admin_key: adminKey || '',
     p_id: id,
@@ -215,6 +217,7 @@ export async function createRestaurant({ adminKey, id, name, category, area, add
     p_capacity_hall: capacityHall ?? null,
     p_menus_text: menusText || null,
     p_note: note || null,
+    p_business_hours: businessHours || null,
     p_active: active !== false
   });
   if (error) throwTranslated(error);
@@ -236,6 +239,7 @@ export async function updateRestaurant({ adminKey, id, patch }) {
     p_capacity_hall: null,
     p_menus_text: null,
     p_note: null,
+    p_business_hours: null,
     p_active: null,
     p_clear_naver_url: false,
     p_clear_image_url: false,
@@ -266,6 +270,7 @@ export async function updateRestaurant({ adminKey, id, patch }) {
   }
   if (p.menusText !== undefined) params.p_menus_text = p.menusText;
   if (p.note !== undefined) params.p_note = p.note;
+  if (p.businessHours !== undefined) params.p_business_hours = p.businessHours;
   if (p.active !== undefined) params.p_active = p.active;
 
   const { error } = await supabase.rpc('update_restaurant', params);
@@ -304,7 +309,7 @@ export async function setRestaurantActive({ adminKey, id, active }) {
 // ─────────────────────────────────────────────────────────
 // 카페 CRUD (관리자) — 식당 함수 미러, capacity_* 제외
 // ─────────────────────────────────────────────────────────
-export async function createCafe({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, active }) {
+export async function createCafe({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, active }) {
   const { data, error } = await supabase.rpc('create_cafe', {
     p_admin_key: adminKey || '',
     p_id: id,
@@ -317,6 +322,7 @@ export async function createCafe({ adminKey, id, name, category, area, address, 
     p_walking_minutes: walkingMinutes ?? null,
     p_menus_text: menusText || null,
     p_note: note || null,
+    p_business_hours: businessHours || null,
     p_active: active !== false
   });
   if (error) throwTranslated(error);
@@ -336,6 +342,7 @@ export async function updateCafe({ adminKey, id, patch }) {
     p_walking_minutes: null,
     p_menus_text: null,
     p_note: null,
+    p_business_hours: null,
     p_active: null,
     p_clear_naver_url: false,
     p_clear_image_url: false
@@ -356,6 +363,7 @@ export async function updateCafe({ adminKey, id, patch }) {
   if (p.walkingMinutes !== undefined) params.p_walking_minutes = p.walkingMinutes;
   if (p.menusText !== undefined) params.p_menus_text = p.menusText;
   if (p.note !== undefined) params.p_note = p.note;
+  if (p.businessHours !== undefined) params.p_business_hours = p.businessHours;
   if (p.active !== undefined) params.p_active = p.active;
 
   const { error } = await supabase.rpc('update_cafe', params);

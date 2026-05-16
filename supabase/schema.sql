@@ -44,6 +44,7 @@ alter table public.restaurants add column if not exists capacity_room int;
 alter table public.restaurants add column if not exists capacity_hall int;
 alter table public.restaurants add column if not exists image_url text;
 alter table public.restaurants add column if not exists area text;
+alter table public.restaurants add column if not exists business_hours text;
 
 -- 카페 — restaurants와 동일 구조에서 회식 수용인원(capacity_*)만 제외.
 -- 점심 식사 후 둘러볼 카페 목록. 투표 후보가 아니라 단순 조회용.
@@ -63,6 +64,7 @@ create table if not exists public.cafes (
 );
 alter table public.cafes add column if not exists area text;
 alter table public.cafes add column if not exists image_url text;
+alter table public.cafes add column if not exists business_hours text;
 
 create table if not exists public.polls (
   id                     text primary key,
@@ -334,6 +336,7 @@ create or replace function public.create_restaurant(
   p_capacity_hall   int default null,
   p_menus_text      text default null,
   p_note            text default null,
+  p_business_hours  text default null,
   p_active          boolean default true
 ) returns text
 language plpgsql
@@ -355,7 +358,7 @@ begin
   end if;
 
   insert into public.restaurants (
-    id, name, category, area, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, active
+    id, name, category, area, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, business_hours, active
   ) values (
     btrim(p_id), btrim(p_name),
     nullif(btrim(coalesce(p_category, '')), ''),
@@ -368,6 +371,7 @@ begin
     p_capacity_hall,
     nullif(btrim(coalesce(p_menus_text, '')), ''),
     nullif(btrim(coalesce(p_note, '')), ''),
+    nullif(btrim(coalesce(p_business_hours, '')), ''),
     coalesce(p_active, true)
   );
 
@@ -400,6 +404,7 @@ create or replace function public.update_restaurant(
   p_capacity_hall        int default null,
   p_menus_text           text default null,
   p_note                 text default null,
+  p_business_hours       text default null,
   p_active               boolean default null,
   p_clear_naver_url      boolean default false,
   p_clear_image_url      boolean default false,
@@ -449,6 +454,7 @@ begin
                         end,
       menus_text      = coalesce(nullif(btrim(p_menus_text), ''), menus_text),
       note            = coalesce(nullif(btrim(p_note), ''),       note),
+      business_hours  = coalesce(nullif(btrim(p_business_hours), ''), business_hours),
       active          = coalesce(p_active, active)
   where id = p_id;
 end;
@@ -548,6 +554,7 @@ create or replace function public.create_cafe(
   p_walking_minutes int default null,
   p_menus_text      text default null,
   p_note            text default null,
+  p_business_hours  text default null,
   p_active          boolean default true
 ) returns text
 language plpgsql
@@ -569,7 +576,7 @@ begin
   end if;
 
   insert into public.cafes (
-    id, name, category, area, address, naver_url, image_url, walking_minutes, menus_text, note, active
+    id, name, category, area, address, naver_url, image_url, walking_minutes, menus_text, note, business_hours, active
   ) values (
     btrim(p_id), btrim(p_name),
     nullif(btrim(coalesce(p_category, '')), ''),
@@ -580,6 +587,7 @@ begin
     p_walking_minutes,
     nullif(btrim(coalesce(p_menus_text, '')), ''),
     nullif(btrim(coalesce(p_note, '')), ''),
+    nullif(btrim(coalesce(p_business_hours, '')), ''),
     coalesce(p_active, true)
   );
 
@@ -610,6 +618,7 @@ create or replace function public.update_cafe(
   p_walking_minutes int default null,
   p_menus_text      text default null,
   p_note            text default null,
+  p_business_hours  text default null,
   p_active          boolean default null,
   p_clear_naver_url boolean default false,
   p_clear_image_url boolean default false
@@ -647,6 +656,7 @@ begin
       walking_minutes = coalesce(p_walking_minutes, walking_minutes),
       menus_text      = coalesce(nullif(btrim(p_menus_text), ''), menus_text),
       note            = coalesce(nullif(btrim(p_note), ''),       note),
+      business_hours  = coalesce(nullif(btrim(p_business_hours), ''), business_hours),
       active          = coalesce(p_active, active)
   where id = p_id;
 end;
@@ -736,13 +746,13 @@ end $$;
 grant execute on function public.submit_vote(text, text, text, text, text)                     to anon, authenticated;
 grant execute on function public.create_poll(text, text, text, date, time, timestamptz, text, text[])          to anon, authenticated;
 grant execute on function public.update_poll(text, text, text, text, date, time, timestamptz, text, boolean, text, text[]) to anon, authenticated;
-grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, boolean)     to anon, authenticated;
-grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
+grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean)     to anon, authenticated;
+grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean, boolean, boolean, boolean) to anon, authenticated;
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
 grant execute on function public.delete_poll(text, text)                                       to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;
-grant execute on function public.create_cafe(text, text, text, text, text, text, text, text, int, text, text, boolean)             to anon, authenticated;
-grant execute on function public.update_cafe(text, text, text, text, text, text, text, text, int, text, text, boolean, boolean, boolean) to anon, authenticated;
+grant execute on function public.create_cafe(text, text, text, text, text, text, text, text, int, text, text, text, boolean)             to anon, authenticated;
+grant execute on function public.update_cafe(text, text, text, text, text, text, text, text, int, text, text, text, boolean, boolean, boolean) to anon, authenticated;
 grant execute on function public.delete_cafe(text, text)                                       to anon, authenticated;
 grant execute on function public.set_cafe_active(text, text, boolean)                          to anon, authenticated;
 

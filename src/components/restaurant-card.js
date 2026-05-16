@@ -45,13 +45,17 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
     ? `<p class="rc-note">📝 ${escapeHtml(r.note)}</p>`
     : '';
 
+  const hoursRow = r.businessHours
+    ? `<p class="rc-hours">🕒 ${escapeHtml(r.businessHours)}</p>`
+    : '';
+
   const mapLink = r.naverUrl
     ? `<a href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" class="rc-map-link" aria-label="네이버 지도에서 보기">↗</a>`
     : '';
 
   const addressRow =
     r.address || r.naverUrl
-      ? `<p class="rc-address">📍 ${escapeHtml(r.address)}${mapLink}</p>`
+      ? `<p class="rc-address">📍 <span class="rc-address-text">${escapeHtml(r.address)}</span>${mapLink}</p>`
       : '';
 
   const choiceRow =
@@ -78,6 +82,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
 
       ${addressRow}
       ${noteRow}
+      ${hoursRow}
 
       ${
         menus

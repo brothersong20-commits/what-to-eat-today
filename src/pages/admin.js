@@ -1185,6 +1185,7 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
     });
     const menusText = serializeMenus(menuRows);
     const note = (mount.querySelector('#rf-note').value || '').trim();
+    const businessHours = (mount.querySelector('#rf-business-hours').value || '').trim();
 
     if (!id || !name) {
       showToast('이름은 필수입니다', { error: true });
@@ -1208,14 +1209,14 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
         await updateRestaurant({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note }
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours }
         });
         showToast('수정되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createRestaurant({
           adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours
         });
         showToast('식당이 추가되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: id });
@@ -1393,6 +1394,7 @@ async function renderCafesTab(mount, shellRoot, { editingId = null } = {}) {
     });
     const menusText = serializeMenus(menuRows);
     const note = (mount.querySelector('#rf-note').value || '').trim();
+    const businessHours = (mount.querySelector('#rf-business-hours').value || '').trim();
 
     if (!id || !name) {
       showToast('이름은 필수입니다', { error: true });
@@ -1416,14 +1418,14 @@ async function renderCafesTab(mount, shellRoot, { editingId = null } = {}) {
         await updateCafe({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note }
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours }
         });
         showToast('수정되었습니다');
         renderCafesTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createCafe({
           adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours
         });
         showToast('카페가 추가되었습니다');
         renderCafesTab(mount, shellRoot, { editingId: id });
@@ -1663,6 +1665,10 @@ function restaurantFormHtml(r, opts = {}) {
       <section class="rf-section stack-3">
         <h4 class="rf-section-title">위치 · 이미지</h4>
         <div class="stack-3">
+          <label class="field-label" for="rf-business-hours">영업시간</label>
+          <input type="text" id="rf-business-hours" class="input" value="${escapeHtml(v.businessHours || '')}" placeholder="예: 매일 11:00–21:00 (브레이크 15:00–17:00)" />
+        </div>
+        <div class="stack-3">
           <label class="field-label" for="rf-address">주소</label>
           <input type="text" id="rf-address" class="input" value="${escapeHtml(v.address || '')}" placeholder="예: 강남구 테헤란로 123" />
         </div>
@@ -1708,7 +1714,7 @@ function menuRowHtml(m) {
         <input type="checkbox" class="me-rep" ${v.representative ? 'checked' : ''} aria-label="대표 메뉴" />
       </label>
       <input type="text" class="input me-name" value="${escapeHtml(v.name || '')}" placeholder="메뉴 이름" />
-      <input type="number" class="input me-price" min="0" value="${v.price != null ? v.price : ''}" placeholder="가격" />
+      <input type="text" inputmode="numeric" class="input me-price" value="${v.price != null ? v.price : ''}" placeholder="가격" />
       <button type="button" class="btn btn-ghost rf-danger me-del" aria-label="행 삭제">✕</button>
     </div>
   `;

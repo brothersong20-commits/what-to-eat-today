@@ -953,14 +953,29 @@ textarea {
   color: var(--text-soft);
 }
 .rc-address,
-.rc-note {
+.rc-note,
+.rc-hours {
   font-size: 1.3rem;
   color: var(--text-soft);
+}
+.rc-address {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.rc-address-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .rc-map-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 1.8rem;
   height: 1.8rem;
   margin-left: var(--space-1);
