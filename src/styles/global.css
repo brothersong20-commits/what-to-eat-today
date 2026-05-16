@@ -402,9 +402,53 @@ textarea {
 .poll-item-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-3);
+}
+.poll-item-meal {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 1rem;
+  border-radius: var(--radius-pill);
+  background: var(--green-light);
+  color: var(--green-starbucks);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.poll-item-date {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.poll-item-substats {
   font-size: 1.3rem;
+  font-weight: 600;
   color: var(--text-soft);
+}
+.poll-item-cta {
+  align-self: flex-start;
+  background: var(--surface-card);
+  color: var(--green-accent);
+  font-size: 1.4rem;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  transition: transform var(--duration) var(--ease),
+    box-shadow var(--duration) var(--ease);
+}
+.poll-item-cta::after {
+  content: ' →';
+  display: inline-block;
+  transition: transform var(--duration) var(--ease);
+}
+.poll-item--countdown:hover .poll-item-cta {
+  box-shadow: var(--shadow-card);
+}
+.poll-item--countdown:hover .poll-item-cta::after {
+  transform: translateX(3px);
+}
+.poll-item--countdown:active .poll-item-cta {
+  transform: scale(var(--press-scale));
 }
 .poll-item-deadline {
   font-weight: 700;
@@ -417,45 +461,39 @@ textarea {
   display: none;
 }
 
-/* 홈 "투표 중인 회식" — 좌측 본문 / 우측 플립시계 2열, 활성 강조 */
+/* 홈 "투표 중인 회식" — 스타벅스 House Green 피처 밴드 (hero, 가로 플립시계) */
 .poll-item--countdown {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
-  background: var(--poll-active-bg);
-  border-color: var(--poll-active-border);
-  border-left: 4px solid var(--poll-active-bar);
-  padding-left: calc(var(--space-3) - 3px);
+  padding: var(--space-4);
+  background: var(--green-house);
+  color: var(--text-on-dark);
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .poll-item--countdown:hover {
-  border-color: var(--green-accent);
   box-shadow: var(--shadow-float);
 }
-.poll-item-main {
-  flex: 1 1 60%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+
+/* 위계 — 카운트다운 카드에서만 (admin 폴 목록은 base 유지) */
+.poll-item--countdown .poll-item-title {
+  color: var(--text-on-dark);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: var(--line-compact);
 }
-.poll-item-aside {
-  flex: 0 0 auto;
-  margin-left: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-2);
-  text-align: right;
-}
-.poll-item-deadline-at {
-  font-size: 1.2rem;
+.poll-item--countdown .poll-item-date {
+  color: var(--text-on-dark-soft);
+  font-size: 1.5rem;
   font-weight: 600;
-  color: var(--text-soft);
 }
-.poll-item.is-expired .poll-item-deadline-at {
-  color: var(--danger);
+.poll-item--countdown .poll-item-substats {
+  color: var(--text-on-dark-soft);
+}
+.poll-item--countdown .flip-clock {
+  align-self: flex-start;
 }
 
 /* ───── Restaurant card ───── */
@@ -684,6 +722,11 @@ textarea {
   --flip-digit-h: var(--flip-digit-h-lg);
   --flip-digit-font: var(--flip-font-lg);
 }
+.flip-clock--md {
+  --flip-digit-w: var(--flip-digit-w-md);
+  --flip-digit-h: var(--flip-digit-h-md);
+  --flip-digit-font: var(--flip-font-md);
+}
 .flip-clock--sm {
   --flip-digit-w: var(--flip-digit-w-sm);
   --flip-digit-h: var(--flip-digit-h-sm);
@@ -692,6 +735,9 @@ textarea {
 .flip-clock__label {
   font-size: 1.5rem;
   color: currentColor;
+}
+.flip-clock--md .flip-clock__label {
+  font-size: 1.4rem;
 }
 .flip-clock--sm .flip-clock__label {
   font-size: 1.3rem;
@@ -721,23 +767,6 @@ textarea {
   line-height: 1;
   opacity: 0.7;
 }
-.flip-group--days .flip-digit {
-  --flip-card-bg: var(--flip-days-bg);
-  --flip-card-bg-2: var(--flip-days-bg-2);
-}
-.flip-group--hours .flip-digit {
-  --flip-card-bg: var(--flip-hours-bg);
-  --flip-card-bg-2: var(--flip-hours-bg-2);
-}
-.flip-group--mins .flip-digit {
-  --flip-card-bg: var(--flip-mins-bg);
-  --flip-card-bg-2: var(--flip-mins-bg-2);
-}
-.flip-group--secs .flip-digit {
-  --flip-card-bg: var(--flip-secs-bg);
-  --flip-card-bg-2: var(--flip-secs-bg-2);
-}
-
 .flip-digit {
   position: relative;
   display: inline-block;

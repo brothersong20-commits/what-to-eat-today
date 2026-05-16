@@ -1,10 +1,10 @@
-import { loadRestaurants, loadPolls } from '../lib/supabase.js';
+import { loadRestaurants, loadPolls, loadVotes } from '../lib/supabase.js';
+import { ATTENDANCE } from '../lib/config.js';
 import {
   isPastDeadline,
   clockParts,
   withinGracePeriod,
-  formatEventDateTime,
-  formatDeadlineParts
+  formatEventDateTime
 } from '../lib/time.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
@@ -59,14 +59,24 @@ export async function renderHome(app) {
   const pollsListEl = app.querySelector('#active-polls-list');
 
   loadPolls()
-    .then((polls) => {
+    .then(async (polls) => {
       const active = polls
         .filter((p) => p.status === 'active'
           && (!isPastDeadline(p.deadline) || withinGracePeriod(p.deadline, 3)))
         .sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
       if (active.length === 0) return;
+
+      const statsById = {};
+      await Promise.all(active.map(async (p) => {
+        try {
+          statsById[p.id] = countAttendance(await loadVotes(p.id));
+        } catch {
+          statsById[p.id] = null;
+        }
+      }));
+
       pollsSection.hidden = false;
-      pollsListEl.innerHTML = active.map(renderPollItem).join('');
+      pollsListEl.innerHTML = active.map((p) => renderPollItem(p, statsById[p.id])).join('');
 
       function tickPollCountdowns() {
         pollsListEl.querySelectorAll('.poll-item').forEach((card) => {
@@ -119,28 +129,33 @@ export async function renderHome(app) {
   render();
 }
 
-function renderPollItem(p) {
+function countAttendance(votes) {
+  const c = { total: votes.length, yes: 0, no: 0 };
+  for (const v of votes) {
+    if (v.attendance === ATTENDANCE.YES) c.yes += 1;
+    else if (v.attendance === ATTENDANCE.NO) c.no += 1;
+  }
+  return c;
+}
+
+function renderPollItem(p, stats) {
   const eventStr = formatEventDateTime(p.eventDate, p.eventTime);
   const expired = isPastDeadline(p.deadline);
-  const dl = formatDeadlineParts(p.deadline);
-  const deadlineAt = dl
-    ? `<span class="poll-item-deadline-at">마감 ${escapeHtml(dl.date)} ${escapeHtml(dl.time)}</span>`
+  const statsHtml = stats
+    ? `<div class="poll-item-substats">참석 ${stats.yes} · 불참 ${stats.no} (총 ${stats.total})</div>`
     : '';
   return `
     <a class="poll-item poll-item--countdown ${expired ? 'is-expired' : ''}"
        href="#/vote/${encodeURIComponent(p.id)}"
        data-deadline="${escapeHtml(p.deadline || '')}">
-      <div class="poll-item-main">
-        <div class="poll-item-title">${escapeHtml(p.title)}</div>
-        <div class="poll-item-meta">
-          ${p.mealType ? `<span>🍽 ${escapeHtml(p.mealType)}</span>` : ''}
-          ${eventStr ? `<span>📅 ${escapeHtml(eventStr)}</span>` : ''}
-        </div>
+      <div class="poll-item-title">${escapeHtml(p.title)}</div>
+      <div class="poll-item-meta">
+        ${p.mealType ? `<span class="poll-item-meal">${escapeHtml(p.mealType)}</span>` : ''}
+        ${eventStr ? `<span class="poll-item-date">${escapeHtml(eventStr)}</span>` : ''}
       </div>
-      <div class="poll-item-aside">
-        ${flipClockHtml({ parts: clockParts(p.deadline), size: 'sm' })}
-        ${deadlineAt}
-      </div>
+      ${statsHtml}
+      ${flipClockHtml({ parts: clockParts(p.deadline), size: 'md', label: '마감까지' })}
+      <span class="poll-item-cta">투표하러 가기</span>
     </a>
   `;
 }

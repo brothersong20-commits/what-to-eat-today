@@ -51,11 +51,6 @@
   --border-soft: #e7e7e7;
   --border-input: #d6dbde;
 
-  /* ───── 투표 중 폴 카드 (활성 강조) ───── */
-  --poll-active-bg: #e9f4ef;              /* 연녹색 틴트 — 흰 식당 카드와 구분, 플립시계 그린과 조화 */
-  --poll-active-border: #b9d8cc;          /* 그린 톤 테두리 (회색 --border-input 대체) */
-  --poll-active-bar: var(--green-accent); /* 좌측 4px 액센트 바 */
-
   /* ───── Typography ───── */
   --font-sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --letter-tight: -0.01em;
@@ -93,27 +88,21 @@
   --press-scale: 0.95;
 
   /* ───── Flip clock (split-flap scoreboard) ───── */
-  --flip-card-bg: #16181c;          /* 농구장 다크 — green-house 보다 짙은 중성 다크 */
+  /* 일·시·분·초 전 칸 차콜 단색 통일 — 홈 활성 폴 밴드·투표 헤더(둘 다 House Green) 위에서 고대비 */
+  --flip-card-bg: #16181c;          /* 차콜 스코어보드 — 상절반 */
   --flip-card-bg-2: #23262d;        /* 하절반 미세 명도 차 */
-  --flip-digit-color: #f3f0e8;      /* 캔버스 크림 동계열 off-white */
+  --flip-digit-color: #f3f0e8;      /* 크림 off-white 숫자 */
   --flip-divider: rgba(0, 0, 0, 0.55);
   --flip-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   --flip-radius: 6px;
-
-  /* 일/시/분/초 — 스타벅스 그린 4계열(짙은→밝은). bg2 = 하절반 약간 더 어둡게 */
-  --flip-days-bg: var(--green-house);     /* #1e3932 */
-  --flip-days-bg-2: #162a25;
-  --flip-hours-bg: var(--green-uplift);   /* #2b5148 */
-  --flip-hours-bg-2: #213f38;
-  --flip-mins-bg: var(--green-accent);    /* #00754a */
-  --flip-mins-bg-2: #005d3b;
-  --flip-secs-bg: var(--green-starbucks); /* #006241 */
-  --flip-secs-bg-2: #004e34;
   --flip-duration: 0.55s;
   --flip-ease: ease-in-out;
   --flip-digit-w-lg: 3.6rem;
   --flip-digit-h-lg: 5.2rem;
   --flip-font-lg: 3.4rem;
+  --flip-digit-w-md: 2.9rem;
+  --flip-digit-h-md: 4.2rem;
+  --flip-font-md: 2.7rem;
   --flip-digit-w-sm: 2.2rem;
   --flip-digit-h-sm: 3.2rem;
   --flip-font-sm: 2.0rem;
