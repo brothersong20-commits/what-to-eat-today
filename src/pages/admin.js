@@ -225,13 +225,15 @@ function pollCardHtml(p) {
   const candidateCount = p.restaurantIds?.length || 0;
   const removedCount = p.removedRestaurantIds?.length || 0;
   return `
-    <a class="poll-item" href="#" data-poll-id="${escapeHtml(p.id)}">
-      <div class="poll-item-title">${escapeHtml(p.title)}</div>
-      <div class="poll-item-meta">
-        ${p.mealType ? `<span>🍽 ${escapeHtml(p.mealType)}</span>` : ''}
-        ${eventStr ? `<span>📅 ${escapeHtml(eventStr)}</span>` : ''}
-        <span>🍱 후보 ${candidateCount}개${removedCount > 0 ? ` · 취소 ${removedCount}` : ''}</span>
+    <a class="poll-item poll-item--admin ${closed ? 'is-closed' : ''}" href="#" data-poll-id="${escapeHtml(p.id)}">
+      <div class="poll-item-admin-head">
+        <div class="poll-item-title">${escapeHtml(p.title)}</div>
         <span class="poll-badge ${closed ? 'is-closed' : 'is-active'}">${closed ? '마감' : '진행중'}</span>
+      </div>
+      <div class="poll-item-meta">
+        ${p.mealType ? `<span class="poll-item-meal">🍽 ${escapeHtml(p.mealType)}</span>` : ''}
+        ${eventStr ? `<span class="poll-item-date">📅 ${escapeHtml(eventStr)}</span>` : ''}
+        <span class="poll-item-substats">🍱 후보 ${candidateCount}개${removedCount > 0 ? ` · 취소 ${removedCount}` : ''}</span>
       </div>
       <div class="poll-item-deadline">⏰ ${escapeHtml(remaining)}</div>
     </a>
@@ -257,7 +259,10 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
   mount.innerHTML = `
     <div class="detail-toolbar">
       <button type="button" class="btn btn-ghost" id="detail-back">← 목록으로</button>
-      <div class="row-2">
+    </div>
+    <div class="card detail-share">
+      <span class="rf-section-title">공유 링크</span>
+      <div class="detail-share-row">
         <input type="text" id="detail-share-url" class="input detail-share-input" readonly value="${escapeHtml(shareUrl)}" />
         <button type="button" class="btn btn-outline" id="detail-copy-url">링크 복사</button>
         <button type="button" class="btn btn-outline" id="detail-qr">QR 코드</button>
@@ -276,55 +281,65 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
         </div>
 
         <form id="detail-form" class="stack-4" novalidate>
-          <div class="stack-3">
-            <label class="field-label" for="df-title">제목</label>
-            <input type="text" id="df-title" class="input" maxlength="60" />
-          </div>
-
-          <div class="stack-3">
-            <label class="field-label" for="df-meal-type">회식 종류</label>
-            <select id="df-meal-type" class="input">
-              <option value="점심">점심</option>
-              <option value="저녁">저녁</option>
-              <option value="회식">회식</option>
-              <option value="기타">기타</option>
-            </select>
-          </div>
-
-          <div class="stack-3">
-            <label class="field-label" for="df-event-date">행사 날짜</label>
-            <input type="date" id="df-event-date" class="input" />
-          </div>
-
-          <div class="stack-3">
-            <label class="field-label" for="df-event-time">행사 시간</label>
-            <input type="time" id="df-event-time" class="input" />
-          </div>
-
-          <div class="stack-3">
-            <label class="field-label" for="df-deadline">투표 마감 시각</label>
-            <input type="datetime-local" id="df-deadline" class="input" />
-          </div>
-
-          <div class="stack-3">
-            <label class="field-label" for="df-description">설명</label>
-            <textarea id="df-description" class="input" rows="3" maxlength="200" style="height: auto; padding: 1rem 1.4rem; resize: vertical;"></textarea>
-          </div>
-
-          <label class="status-toggle">
-            <input type="checkbox" id="df-status-closed" />
-            <span>이 투표를 마감 처리</span>
-          </label>
-
-          <div class="stack-3">
-            <label class="field-label">투표 후보 식당</label>
-            <p class="text-soft fs-small">최소 2개. 체크 해제하면 후보에서 제외되고 "취소된 식당"으로 표시됩니다.</p>
-            <div id="df-restaurant-filter"></div>
-            <div class="row-3" style="justify-content: space-between;">
-              <span class="fs-small text-soft" id="df-restaurant-count">선택 0개</span>
+          <section class="rf-section stack-3">
+            <h4 class="rf-section-title">기본 정보</h4>
+            <div class="stack-3">
+              <label class="field-label" for="df-title">제목</label>
+              <input type="text" id="df-title" class="input" maxlength="60" />
             </div>
-            <div id="df-restaurant-list" class="admin-restaurant-grid"></div>
-          </div>
+            <div class="stack-3">
+              <label class="field-label" for="df-meal-type">회식 종류</label>
+              <select id="df-meal-type" class="input">
+                <option value="점심">점심</option>
+                <option value="저녁">저녁</option>
+                <option value="회식">회식</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+          </section>
+
+          <section class="rf-section stack-3">
+            <h4 class="rf-section-title">일정</h4>
+            <div class="field-pair">
+              <div class="stack-3">
+                <label class="field-label" for="df-event-date">행사 날짜</label>
+                <input type="date" id="df-event-date" class="input" />
+              </div>
+              <div class="stack-3">
+                <label class="field-label" for="df-event-time">행사 시간</label>
+                <input type="time" id="df-event-time" class="input" />
+              </div>
+            </div>
+            <div class="stack-3">
+              <label class="field-label" for="df-deadline">투표 마감 시각</label>
+              <input type="datetime-local" id="df-deadline" class="input" />
+            </div>
+          </section>
+
+          <section class="rf-section stack-3">
+            <h4 class="rf-section-title">상태 · 후보</h4>
+            <label class="status-toggle">
+              <input type="checkbox" id="df-status-closed" />
+              <span>이 투표를 마감 처리</span>
+            </label>
+            <div class="stack-3">
+              <label class="field-label">투표 후보 식당</label>
+              <p class="text-soft fs-small">최소 2개. 체크 해제하면 후보에서 제외되고 "취소된 식당"으로 표시됩니다.</p>
+              <div id="df-restaurant-filter"></div>
+              <div class="row-3" style="justify-content: space-between;">
+                <span class="fs-small text-soft" id="df-restaurant-count">선택 0개</span>
+              </div>
+              <div id="df-restaurant-list" class="admin-restaurant-grid"></div>
+            </div>
+          </section>
+
+          <section class="rf-section stack-3">
+            <h4 class="rf-section-title">메모</h4>
+            <div class="stack-3">
+              <label class="field-label" for="df-description">설명</label>
+              <textarea id="df-description" class="input" rows="3" maxlength="200" style="height: auto; padding: 1rem 1.4rem; resize: vertical;"></textarea>
+            </div>
+          </section>
         </form>
 
         <button class="btn btn-primary btn-block" id="df-save">저장하기</button>
@@ -411,6 +426,7 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
       const el = statusMount.querySelector('#detail-countdown');
       if (!el) return;
       const closedNow = poll.status === 'closed' || isPastDeadline(poll.deadline);
+      el.classList.toggle('is-closed', closedNow);
       el.textContent = closedNow ? '⏹ 마감됨' : `⏰ 마감까지: ${formatRemaining(poll.deadline)}`;
     };
     const cdHandle = setInterval(tick, 1000);
@@ -539,14 +555,14 @@ function renderStatusPanel(mount, poll, allRestaurants, votes) {
   mount.innerHTML = `
     <div class="stack-3">
       <h2>실시간 현황</h2>
-      <div class="status-countdown" id="detail-countdown">
+      <div class="status-countdown ${closed ? 'is-closed' : ''}" id="detail-countdown">
         ${closed ? '⏹ 마감됨' : `⏰ 마감까지: ${escapeHtml(formatRemaining(poll.deadline))}`}
       </div>
       <p class="text-soft fs-small">투표가 들어오는 즉시 실시간으로 반영됩니다</p>
     </div>
 
     <div class="status-stats">
-      <div class="stat">
+      <div class="stat stat--yes">
         <div class="stat-num">${activeResult.attendance[ATTENDANCE.YES]}</div>
         <div class="stat-label">참석</div>
       </div>
@@ -567,7 +583,7 @@ function renderStatusPanel(mount, poll, allRestaurants, votes) {
           ? `<p class="text-soft fs-small">아직 식당에 투표한 사람이 없습니다.</p>`
           : `<ol class="status-ranking">
               ${activeResult.ranking.map((item, idx) => `
-                <li class="status-rank-row">
+                <li class="status-rank-row ${idx === 0 ? 'is-top' : ''}">
                   <span class="rank-no">${idx === 0 ? '🏆' : `#${idx + 1}`}</span>
                   <span class="rank-name">${escapeHtml(item.restaurant.name)}</span>
                   <span class="rank-score">${item.score}점 <span class="text-mute fs-small">(${item.first}·${item.second})</span></span>
@@ -732,47 +748,55 @@ async function renderForm(mount, shellRoot) {
       </div>
 
       <form id="new-form" class="stack-4" novalidate>
-        <div class="stack-3">
-          <label class="field-label" for="nf-title">제목</label>
-          <input type="text" id="nf-title" class="input" maxlength="60" placeholder="예: 5월 부서 저녁회식" autocomplete="off" />
-          <p class="field-error" id="nf-title-error" hidden>제목을 입력해주세요.</p>
-        </div>
+        <section class="rf-section stack-3">
+          <h4 class="rf-section-title">기본 정보</h4>
+          <div class="stack-3">
+            <label class="field-label" for="nf-title">제목</label>
+            <input type="text" id="nf-title" class="input" maxlength="60" placeholder="예: 5월 부서 저녁회식" autocomplete="off" />
+            <p class="field-error" id="nf-title-error" hidden>제목을 입력해주세요.</p>
+          </div>
+          <div class="stack-3">
+            <label class="field-label" for="nf-meal-type">회식 종류</label>
+            <select id="nf-meal-type" class="input">
+              <option value="점심">점심</option>
+              <option value="저녁" selected>저녁</option>
+              <option value="회식">회식</option>
+              <option value="기타">기타</option>
+            </select>
+          </div>
+        </section>
 
-        <div class="stack-3">
-          <label class="field-label" for="nf-meal-type">회식 종류</label>
-          <select id="nf-meal-type" class="input">
-            <option value="점심">점심</option>
-            <option value="저녁" selected>저녁</option>
-            <option value="회식">회식</option>
-            <option value="기타">기타</option>
-          </select>
-        </div>
+        <section class="rf-section stack-3">
+          <h4 class="rf-section-title">일정</h4>
+          <div class="field-pair">
+            <div class="stack-3">
+              <label class="field-label" for="nf-event-date">행사 날짜</label>
+              <input type="date" id="nf-event-date" class="input" />
+              <p class="field-error" id="nf-event-date-error" hidden>행사 날짜를 선택해주세요.</p>
+            </div>
+            <div class="stack-3">
+              <label class="field-label" for="nf-event-time">행사 시간</label>
+              <input type="time" id="nf-event-time" class="input" />
+              <p class="field-error" id="nf-event-time-error" hidden>행사 시간을 선택해주세요.</p>
+            </div>
+          </div>
+          <div class="stack-3">
+            <label class="field-label" for="nf-deadline">투표 마감 시각</label>
+            <input type="datetime-local" id="nf-deadline" class="input" />
+            <p class="field-error" id="nf-deadline-error" hidden>마감 시각을 선택해주세요.</p>
+          </div>
+        </section>
 
-        <div class="stack-3">
-          <label class="field-label" for="nf-event-date">행사 날짜</label>
-          <input type="date" id="nf-event-date" class="input" />
-          <p class="field-error" id="nf-event-date-error" hidden>행사 날짜를 선택해주세요.</p>
-        </div>
+        <section class="rf-section stack-3">
+          <h4 class="rf-section-title">메모</h4>
+          <div class="stack-3">
+            <label class="field-label" for="nf-description">설명 (선택)</label>
+            <textarea id="nf-description" class="input" rows="3" maxlength="200" placeholder="참석자에게 보일 메모" style="height: auto; padding: 1rem 1.4rem; resize: vertical;"></textarea>
+          </div>
+        </section>
 
-        <div class="stack-3">
-          <label class="field-label" for="nf-event-time">행사 시간</label>
-          <input type="time" id="nf-event-time" class="input" />
-          <p class="field-error" id="nf-event-time-error" hidden>행사 시간을 선택해주세요.</p>
-        </div>
-
-        <div class="stack-3">
-          <label class="field-label" for="nf-deadline">투표 마감 시각</label>
-          <input type="datetime-local" id="nf-deadline" class="input" />
-          <p class="field-error" id="nf-deadline-error" hidden>마감 시각을 선택해주세요.</p>
-        </div>
-
-        <div class="stack-3">
-          <label class="field-label" for="nf-description">설명 (선택)</label>
-          <textarea id="nf-description" class="input" rows="3" maxlength="200" placeholder="참석자에게 보일 메모" style="height: auto; padding: 1rem 1.4rem; resize: vertical;"></textarea>
-        </div>
-
-        <div class="stack-3">
-          <label class="field-label">투표 후보 식당</label>
+        <section class="rf-section stack-3">
+          <h4 class="rf-section-title">투표 후보 식당</h4>
           <p class="text-soft fs-small">참석자가 1·2순위로 고를 식당을 골라주세요. (최소 2개)</p>
           <div id="nf-restaurant-filter"></div>
           <div class="row-3" style="justify-content: space-between;">
@@ -780,7 +804,7 @@ async function renderForm(mount, shellRoot) {
           </div>
           <div id="nf-restaurant-list" class="admin-restaurant-grid"></div>
           <p class="field-error" id="nf-restaurants-error" hidden>최소 2개 이상의 식당을 선택해주세요.</p>
-        </div>
+        </section>
       </form>
     </section>
 

@@ -271,6 +271,50 @@ textarea {
   background: var(--danger-tint);
 }
 
+/* ───── Native date/time field polish ─────
+   팝업 그리드는 브라우저 shadow-DOM이라 직접 스타일 불가.
+   color-scheme:light 가 따뜻한 라이트 팝업을 강제하는 유일한 완화책. */
+.input[type='date'],
+.input[type='time'],
+.input[type='datetime-local'] {
+  color-scheme: light;
+  display: flex;
+  align-items: center;
+  cursor: text;
+}
+.input[type='date']::-webkit-datetime-edit,
+.input[type='time']::-webkit-datetime-edit,
+.input[type='datetime-local']::-webkit-datetime-edit,
+.input[type='date']::-webkit-datetime-edit-fields-wrapper,
+.input[type='time']::-webkit-datetime-edit-fields-wrapper,
+.input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+  line-height: var(--line-compact);
+}
+.input[type='date']::-webkit-calendar-picker-indicator,
+.input[type='time']::-webkit-calendar-picker-indicator,
+.input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  width: 2rem;
+  height: 2rem;
+  padding: 0.4rem;
+  margin-left: var(--space-2);
+  cursor: pointer;
+  opacity: 0.55;
+  border-radius: var(--radius-input);
+  transition: opacity var(--duration) var(--ease),
+    background var(--duration) var(--ease);
+}
+.input[type='date']:hover::-webkit-calendar-picker-indicator,
+.input[type='time']:hover::-webkit-calendar-picker-indicator,
+.input[type='datetime-local']:hover::-webkit-calendar-picker-indicator,
+.input[type='date']:focus::-webkit-calendar-picker-indicator,
+.input[type='time']:focus::-webkit-calendar-picker-indicator,
+.input[type='datetime-local']:focus::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  background: var(--green-light);
+}
+/* Firefox: picker-indicator pseudo 없음 — 위 color-scheme 만으로 충분 */
+
 .field-label {
   display: block;
   font-size: 1.3rem;
@@ -937,12 +981,12 @@ textarea {
 }
 .flip-clock__groups {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-3);
 }
 .flip-group {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 0.5rem;
 }
@@ -955,10 +999,10 @@ textarea {
 }
 .flip-group__cap {
   color: currentColor;
-  font-size: calc(var(--flip-digit-font) * 0.42);
+  font-size: calc(var(--flip-digit-font) * 0.5);
   font-weight: 700;
   line-height: 1;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 .flip-digit {
   position: relative;
@@ -1290,6 +1334,17 @@ textarea {
   margin-left: auto;
 }
 
+/* 관리자 폼 — 2단 행 (df-/nf- 공통, 식당 폼과 동일 패턴) */
+.field-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.field-pair > .stack-3 {
+  flex: 1;
+  min-width: 14rem;
+}
+
 /* ───── 진행중 투표 카드 — 추가 badge ───── */
 .poll-badge {
   display: inline-flex;
@@ -1306,6 +1361,42 @@ textarea {
 }
 .poll-badge.is-closed {
   background: rgba(0, 0, 0, 0.06);
+  color: var(--text-soft);
+}
+
+/* 관리자 폴 목록 전용 변형 — 홈 .poll-item--countdown 과 완전 분리 */
+.poll-item--admin {
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+.poll-item--admin .poll-item-admin-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.poll-item--admin .poll-item-title {
+  font-size: 1.9rem;
+}
+.poll-item--admin .poll-item-meta {
+  gap: var(--space-2) var(--space-3);
+}
+.poll-item--admin .poll-item-meal {
+  font-size: 1.3rem;
+  padding: 0.2rem 0.9rem;
+}
+.poll-item--admin .poll-item-date {
+  font-size: 1.4rem;
+}
+.poll-item--admin .poll-item-deadline {
+  align-self: flex-end;
+  font-size: 1.5rem;
+  color: var(--green-accent);
+}
+.poll-item--admin.is-closed {
+  opacity: 0.7;
+}
+.poll-item--admin.is-closed .poll-item-deadline {
   color: var(--text-soft);
 }
 
@@ -1330,12 +1421,23 @@ textarea {
 .detail-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
   flex-wrap: wrap;
 }
+.detail-share {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.detail-share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 .detail-share-input {
+  flex: 1;
   min-width: 24rem;
   font-size: 1.3rem;
 }
@@ -1376,9 +1478,17 @@ textarea {
 
 /* ───── 현황 패널 ───── */
 .status-countdown {
-  font-size: 1.7rem;
+  font-size: 2.4rem;
   font-weight: 700;
   color: var(--green-starbucks);
+  padding: var(--space-3) var(--space-4);
+  background: var(--green-light);
+  border-radius: var(--radius-card);
+  line-height: var(--line-compact);
+}
+.status-countdown.is-closed {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-soft);
 }
 .status-stats {
   display: grid;
@@ -1401,6 +1511,13 @@ textarea {
   margin-top: var(--space-1);
   font-size: 1.3rem;
   color: var(--text-soft);
+}
+.status-stats .stat--yes {
+  background: var(--green-light);
+}
+.status-stats .stat--yes .stat-num,
+.status-stats .stat--yes .stat-label {
+  color: var(--green-starbucks);
 }
 
 .status-ranking {
@@ -1435,6 +1552,13 @@ textarea {
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
 }
+.status-rank-row.is-top {
+  background: var(--green-light);
+}
+.status-rank-row.is-top .rank-no,
+.status-rank-row.is-top .rank-name {
+  color: var(--green-starbucks);
+}
 .status-rank-row.is-removed {
   opacity: 0.7;
   background: var(--danger-tint);
@@ -1447,7 +1571,7 @@ textarea {
 }
 
 .removed-section h3 {
-  color: var(--danger);
+  color: var(--text-soft);
   font-size: 1.5rem;
 }
 
@@ -1516,7 +1640,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0.9rem 1.2rem;
+  padding: 0.8rem 1.2rem;
   background: var(--surface-card);
   border: 1px solid transparent;
   border-radius: var(--radius-input);
