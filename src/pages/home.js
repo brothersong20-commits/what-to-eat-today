@@ -15,6 +15,7 @@ import { escapeHtml } from '../lib/escape.js';
 import { uniq } from '../lib/facets.js';
 import { getClientId } from '../lib/client-id.js';
 import { showToast } from '../lib/toast.js';
+import { openModal } from '../lib/modal.js';
 
 export async function renderHome(app) {
   app.innerHTML = `
@@ -269,6 +270,7 @@ export async function renderHome(app) {
     bindFilterBar(cafeFilterMount, cafeFilterState, renderCafes);
     renderCafes();
     cafeListEl.addEventListener('click', handleLikeClick);
+    cafeListEl.addEventListener('click', makeMenuBoardHandler((id) => cafes.find((c) => c.id === id)));
     likesReady.then(patchVisibleLikes);
   })();
 
@@ -318,8 +320,35 @@ export async function renderHome(app) {
     bindFilterBar(filterMount, filterState, render);
     render();
     listEl.addEventListener('click', handleLikeClick);
+    listEl.addEventListener('click', makeMenuBoardHandler((id) => restaurants.find((r) => r.id === id)));
     likesReady.then(patchVisibleLikes);
   })();
+}
+
+// 둘러보기 카드의 "메뉴판 보기" → 이미지 갤러리 모달. findById로 in-scope 목록에서 레코드 조회.
+function makeMenuBoardHandler(findById) {
+  return (e) => {
+    const btn = e.target.closest('.rc-menuboard-chip');
+    if (!btn) return;
+    const rec = findById(btn.dataset.menuboardId);
+    if (!rec || !rec.menuImageUrls || !rec.menuImageUrls.length) return;
+    const imgs = rec.menuImageUrls
+      .map(
+        (u) =>
+          `<img class="menuboard-img" src="${escapeHtml(u)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'" />`
+      )
+      .join('');
+    openModal({
+      overlayClass: 'qr-modal-overlay',
+      html: `
+        <div class="qr-modal-card menuboard-modal-card stack-3" role="dialog" aria-modal="true" aria-label="메뉴판">
+          <button type="button" class="qr-modal-close" data-modal-close aria-label="닫기">✕</button>
+          <h3 class="qr-modal-title">${escapeHtml(rec.name)} 메뉴판</h3>
+          <div class="menuboard-gallery">${imgs}</div>
+        </div>
+      `
+    });
+  };
 }
 
 function countAttendance(votes) {

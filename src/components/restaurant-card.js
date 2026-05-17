@@ -62,6 +62,14 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
       ? `<span class="rc-like rc-like--readonly ${like.liked ? 'is-liked' : ''}" role="img" aria-label="좋아요 ${likeCount}개">${heartSvg()}<span class="rc-like-count">${likeCount}</span></span>`
       : `<button type="button" class="rc-like ${like.liked ? 'is-liked' : ''}" data-like-type="${escapeHtml(like.type)}" data-like-id="${escapeHtml(r.id)}" aria-pressed="${like.liked ? 'true' : 'false'}" aria-label="좋아요">${heartSvg()}<span class="rc-like-count">${likeCount}</span></button>`;
 
+  const menuBoardChip =
+    mode === 'view' && r.menuImageUrls && r.menuImageUrls.length
+      ? `<button type="button" class="rc-menuboard-chip" data-menuboard-id="${escapeHtml(r.id)}" aria-label="메뉴판 사진 ${r.menuImageUrls.length}장 보기">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="10" r="1.6" fill="currentColor"/><path d="M5 17l4.5-4.5 3 3L16 12l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          메뉴판 ${r.menuImageUrls.length}
+        </button>`
+      : '';
+
   const choiceRow =
     mode === 'choice'
       ? `<div class="rc-choices">
@@ -90,11 +98,18 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
       ${hoursRow}
 
       ${
-        menus
-          ? `<details class="rc-menus">
-              <summary>메뉴 ${r.menus.length}개 보기</summary>
-              <ul class="menu-list">${menus}</ul>
-            </details>`
+        menus || menuBoardChip
+          ? `<div class="rc-actions">
+              ${
+                menus
+                  ? `<details class="rc-menus">
+                      <summary>메뉴 ${r.menus.length}개 보기</summary>
+                      <ul class="menu-list">${menus}</ul>
+                    </details>`
+                  : ''
+              }
+              ${menuBoardChip}
+            </div>`
           : ''
       }
 

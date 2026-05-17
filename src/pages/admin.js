@@ -1157,6 +1157,7 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
       imagePreview.hidden = true;
     }
   });
+  bindMenuImagesPreview(mount);
 
   mount.querySelector('#rf-save').addEventListener('click', async () => {
     const id = (mount.querySelector('#rf-id').value || '').trim();
@@ -1203,6 +1204,12 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
       return;
     }
 
+    const menuImageUrls = parseMenuImageUrls(mount.querySelector('#rf-menu-images')?.value);
+    if (menuImageUrls.some((u) => !/^https?:\/\//i.test(u))) {
+      showToast('메뉴판 이미지 URL은 모두 http(s)://로 시작해야 합니다', { error: true });
+      return;
+    }
+
     const isGroupDining = mount.querySelector('#rf-group-dining')?.checked || false;
 
     try {
@@ -1210,14 +1217,14 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
         await updateRestaurant({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining }
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining, menuImageUrls }
         });
         showToast('수정되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createRestaurant({
           adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining, menuImageUrls
         });
         showToast('식당이 추가되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: id });
@@ -1368,6 +1375,7 @@ async function renderCafesTab(mount, shellRoot, { editingId = null } = {}) {
       imagePreview.hidden = true;
     }
   });
+  bindMenuImagesPreview(mount);
 
   mount.querySelector('#rf-save').addEventListener('click', async () => {
     const id = (mount.querySelector('#rf-id').value || '').trim();
@@ -1413,20 +1421,25 @@ async function renderCafesTab(mount, shellRoot, { editingId = null } = {}) {
       showToast('도보 시간은 0 이상의 숫자여야 합니다', { error: true });
       return;
     }
+    const menuImageUrls = parseMenuImageUrls(mount.querySelector('#rf-menu-images')?.value);
+    if (menuImageUrls.some((u) => !/^https?:\/\//i.test(u))) {
+      showToast('메뉴판 이미지 URL은 모두 http(s)://로 시작해야 합니다', { error: true });
+      return;
+    }
 
     try {
       if (editing) {
         await updateCafe({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours }
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls }
         });
         showToast('수정되었습니다');
         renderCafesTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createCafe({
           adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls
         });
         showToast('카페가 추가되었습니다');
         renderCafesTab(mount, shellRoot, { editingId: id });
@@ -1693,6 +1706,12 @@ function restaurantFormHtml(r, opts = {}) {
           <p class="text-soft fs-small">외부 이미지 링크를 붙여넣으면 식당 카드·목록에 썸네일로 표시됩니다.</p>
           <img id="rf-image-preview" class="rf-image-preview" alt="썸네일 미리보기" src="${escapeHtml(v.imageUrl || '')}" ${v.imageUrl ? '' : 'hidden'} referrerpolicy="no-referrer" onerror="this.hidden = true" />
         </div>
+        <div class="stack-3">
+          <label class="field-label" for="rf-menu-images">메뉴판 이미지 URL (여러 장)</label>
+          <textarea id="rf-menu-images" class="input" rows="3" style="height: auto; padding: 1rem 1.4rem; resize: vertical;" placeholder="한 줄에 하나씩. 예: https://images.example.com/menu1.jpg">${escapeHtml((v.menuImageUrls || []).join('\n'))}</textarea>
+          <p class="text-soft fs-small">한 줄에 URL 하나씩. http(s)://로 시작해야 하며, 둘러보기에서 "메뉴판 보기"로 크게 볼 수 있습니다.</p>
+          <div id="rf-menu-images-preview" class="rf-menuimg-preview">${(v.menuImageUrls || []).map((u) => `<img class="rf-menuimg-thumb" src="${escapeHtml(u)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" />`).join('')}</div>
+        </div>
       </section>
 
       <section class="rf-section stack-3">
@@ -1729,6 +1748,28 @@ function menuRowHtml(m) {
       <button type="button" class="btn btn-ghost rf-danger me-del" aria-label="행 삭제">✕</button>
     </div>
   `;
+}
+
+// 메뉴판 이미지 URL textarea — 줄바꿈 구분, 빈 줄 제외. 식당·카페 폼 공유.
+function parseMenuImageUrls(text) {
+  return String(text || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function bindMenuImagesPreview(mount) {
+  const ta = mount.querySelector('#rf-menu-images');
+  const box = mount.querySelector('#rf-menu-images-preview');
+  if (!ta || !box) return;
+  ta.addEventListener('input', () => {
+    box.innerHTML = parseMenuImageUrls(ta.value)
+      .map(
+        (u) =>
+          `<img class="rf-menuimg-thumb" src="${escapeHtml(u)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" />`
+      )
+      .join('');
+  });
 }
 
 function handleAdminError(err, mount, shellRoot) {
