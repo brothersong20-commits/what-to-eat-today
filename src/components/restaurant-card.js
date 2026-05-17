@@ -1,23 +1,19 @@
 import { formatPrice, compareMenu } from '../lib/menus.js';
-import { categorySlug } from '../lib/config.js';
+import { escapeHtml } from '../lib/escape.js';
 import { verifiedSealHtml } from './verified-seal.js';
-
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { heartSvg } from './heart-icon.js';
+import { categoryBadgeHtml, areaBadgeHtml } from './category-badge.js';
 
 /**
  * 식당 카드 HTML.
  * mode:
  *   'view'   — 홈/탐색용 (메뉴 펼치기 토글)
  *   'choice' — 투표용 (1·2순위 라디오)
+ * like: { type: 'restaurant'|'cafe', count: number, liked: boolean, readonly?: boolean }
+ *   주면 카드 우상단에 좋아요 하트를 렌더. 없으면 미렌더.
+ *   readonly=true 면 클릭 불가한 표시 전용(투표 창 — 결과만 보기).
  */
-export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice2Id } = {}) {
+export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice2Id, like } = {}) {
   const menus = (r.menus || [])
     .slice()
     .sort(compareMenu)
@@ -31,8 +27,8 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
     .join('');
 
   const meta = [
-    r.category && `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>`,
-    r.area && `<span class="rc-badge rc-badge--area">${escapeHtml(r.area)}</span>`,
+    categoryBadgeHtml(r.category),
+    areaBadgeHtml(r.area),
     r.walkingMinutes != null && `<span class="rc-meta">🚶 도보 ${r.walkingMinutes}분</span>`
   ]
     .filter(Boolean)
@@ -59,6 +55,13 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
       ? `<p class="rc-address">📍 <span class="rc-address-text">${escapeHtml(r.address)}</span>${mapLink}</p>`
       : '';
 
+  const likeCount = Number(like && like.count) || 0;
+  const likeBtn = !like
+    ? ''
+    : like.readonly
+      ? `<span class="rc-like rc-like--readonly ${like.liked ? 'is-liked' : ''}" role="img" aria-label="좋아요 ${likeCount}개">${heartSvg()}<span class="rc-like-count">${likeCount}</span></span>`
+      : `<button type="button" class="rc-like ${like.liked ? 'is-liked' : ''}" data-like-type="${escapeHtml(like.type)}" data-like-id="${escapeHtml(r.id)}" aria-pressed="${like.liked ? 'true' : 'false'}" aria-label="좋아요">${heartSvg()}<span class="rc-like-count">${likeCount}</span></button>`;
+
   const choiceRow =
     mode === 'choice'
       ? `<div class="rc-choices">
@@ -75,6 +78,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
 
   return `
     <article class="restaurant-card" data-id="${escapeHtml(r.id)}">
+      ${likeBtn}
       ${thumb}
       <header class="rc-header">
         <h3 class="rc-name">${escapeHtml(r.name)}${r.isGroupDining ? verifiedSealHtml() : ''}</h3>

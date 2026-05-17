@@ -1,5 +1,5 @@
 import { createPoll, updatePoll, deletePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive, loadCafes, createCafe, updateCafe, deleteCafe, setCafeActive, loadOptions, createOption, updateOption, deleteOption } from '../lib/supabase.js';
-import { CATEGORIES, AREAS, CAFE_CATEGORIES, categorySlug } from '../lib/config.js';
+import { CATEGORIES, AREAS, CAFE_CATEGORIES } from '../lib/config.js';
 import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
@@ -8,14 +8,11 @@ import { isPastDeadline, formatRemaining, formatEventDateTime, deadlineUrgency, 
 import { ATTENDANCE } from '../lib/config.js';
 import { buildShareUrl, openQrModal } from '../components/share.js';
 import { verifiedSealHtml } from '../components/verified-seal.js';
+import { categoryBadgeHtml, areaBadgeHtml } from '../components/category-badge.js';
+import { escapeHtml } from '../lib/escape.js';
+import { uniq } from '../lib/facets.js';
 
 const STORAGE_KEY = 'wte_admin_key';
-
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}
 
 // 모듈 스코프 cleanup 레지스트리 — 탭 전환·상세 떠나기·해시 변경 시 모두 회수
 const cleanups = new Set();
@@ -725,7 +722,7 @@ function mountRestaurantPicker(els, restaurants, opts = {}) {
   const removedSet = new Set(removedDisplay);
   const filterState = { category: '', query: '', groupDining: false };
 
-  const categories = [...new Set(restaurants.map((r) => r.category).filter(Boolean))];
+  const categories = uniq(restaurants, 'category');
   filterMount.innerHTML = filterBarHtml({ categories, selectedCategory: '', query: '', groupDining: true });
 
   function renderList() {
@@ -1590,8 +1587,8 @@ function restaurantRowHtml(r, isEditing) {
     <div class="rest-row ${isEditing ? 'is-editing' : ''} ${r.active ? '' : 'is-inactive'}" data-restaurant-id="${escapeHtml(r.id)}">
       ${r.imageUrl ? `<img class="rest-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />` : ''}
       <span class="rest-id">${escapeHtml(r.id)}</span>
-      ${r.category ? `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>` : ''}
-      ${r.area ? `<span class="rc-badge rc-badge--area">${escapeHtml(r.area)}</span>` : ''}
+      ${categoryBadgeHtml(r.category)}
+      ${areaBadgeHtml(r.area)}
       ${r.isGroupDining ? verifiedSealHtml({ size: '1.6rem' }) : ''}
       <span class="rest-name">${escapeHtml(r.name)}</span>
       ${r.naverUrl ? `<a class="rest-naver" href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}

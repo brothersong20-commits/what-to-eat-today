@@ -94,6 +94,17 @@ create table if not exists public.votes (
 create index if not exists votes_poll_id_idx on public.votes (poll_id);
 create index if not exists polls_status_deadline_idx on public.polls (status, deadline);
 
+-- 식당·카페 좋아요 — 브라우저 단위(liker_id)로 토글. votes 테이블 패턴 미러.
+-- (entity_type, entity_id, liker_id) PK로 같은 브라우저의 중복 좋아요를 막는다.
+create table if not exists public.likes (
+  entity_type text not null check (entity_type in ('restaurant', 'cafe')),
+  entity_id   text not null,
+  liker_id    text not null,
+  liked_at    timestamptz not null default now(),
+  primary key (entity_type, entity_id, liker_id)
+);
+create index if not exists likes_entity_idx on public.likes (entity_type, entity_id);
+
 -- ─────────────────────────────────────────────────────────
 -- 2. RPC: submit_vote
 --    (poll_id, voter_name)로 upsert. 마감/상태 서버 검증.
@@ -155,6 +166,56 @@ begin
       voted_at    = excluded.voted_at;
 
   return v_existed;
+end;
+$$;
+
+-- ─────────────────────────────────────────────────────────
+-- 2b. RPC: toggle_like
+--     submit_vote와 동일 구조 — 입력 검증 → 대상 존재 확인 → upsert/delete 토글.
+--     반환 boolean: true = 호출 후 좋아요 상태(추가됨), false = 취소됨.
+-- ─────────────────────────────────────────────────────────
+create or replace function public.toggle_like(
+  p_entity_type text,
+  p_entity_id   text,
+  p_liker_id    text
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_liked boolean;
+begin
+  if p_entity_type is null or p_entity_id is null or btrim(coalesce(p_entity_id, '')) = ''
+     or p_liker_id is null or btrim(coalesce(p_liker_id, '')) = '' then
+    raise exception 'missing_required_fields';
+  end if;
+  if p_entity_type not in ('restaurant', 'cafe') then
+    raise exception 'invalid_entity_type';
+  end if;
+  if p_entity_type = 'restaurant'
+     and not exists (select 1 from public.restaurants where id = p_entity_id) then
+    raise exception 'restaurant_not_found';
+  end if;
+  if p_entity_type = 'cafe'
+     and not exists (select 1 from public.cafes where id = p_entity_id) then
+    raise exception 'cafe_not_found';
+  end if;
+
+  if exists (
+    select 1 from public.likes
+    where entity_type = p_entity_type and entity_id = p_entity_id and liker_id = p_liker_id
+  ) then
+    delete from public.likes
+      where entity_type = p_entity_type and entity_id = p_entity_id and liker_id = p_liker_id;
+    v_liked := false;
+  else
+    insert into public.likes (entity_type, entity_id, liker_id)
+      values (p_entity_type, p_entity_id, p_liker_id);
+    v_liked := true;
+  end if;
+
+  return v_liked;
 end;
 $$;
 
@@ -719,21 +780,24 @@ alter table public.restaurants enable row level security;
 alter table public.cafes       enable row level security;
 alter table public.polls       enable row level security;
 alter table public.votes       enable row level security;
+alter table public.likes       enable row level security;
 
 drop policy if exists restaurants_read on public.restaurants;
 drop policy if exists cafes_read       on public.cafes;
 drop policy if exists polls_read       on public.polls;
 drop policy if exists votes_read       on public.votes;
+drop policy if exists likes_read       on public.likes;
 
 create policy restaurants_read on public.restaurants for select using (true);
 create policy cafes_read       on public.cafes       for select using (true);
 create policy polls_read       on public.polls       for select using (true);
 create policy votes_read       on public.votes       for select using (true);
+create policy likes_read       on public.likes       for select using (true);
 -- INSERT/UPDATE/DELETE 정책은 일부러 없음 → 익명 클라이언트는 직접 변경 불가.
 -- 데이터 변경은 위의 RPC(security definer)로만 가능.
 
 -- ─────────────────────────────────────────────────────────
--- 6. Realtime — votes 테이블의 변경을 클라이언트가 구독 가능
+-- 6. Realtime — votes·likes 테이블의 변경을 클라이언트가 구독 가능
 -- ─────────────────────────────────────────────────────────
 do $$
 begin
@@ -745,10 +809,21 @@ begin
   end if;
 end $$;
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'likes'
+  ) then
+    alter publication supabase_realtime add table public.likes;
+  end if;
+end $$;
+
 -- ─────────────────────────────────────────────────────────
 -- 7. RPC 호출 권한 — anon, authenticated에 EXECUTE 부여
 -- ─────────────────────────────────────────────────────────
 grant execute on function public.submit_vote(text, text, text, text, text)                     to anon, authenticated;
+grant execute on function public.toggle_like(text, text, text)                                 to anon, authenticated;
 grant execute on function public.create_poll(text, text, text, date, time, timestamptz, text, text[])          to anon, authenticated;
 grant execute on function public.update_poll(text, text, text, text, date, time, timestamptz, text, boolean, text, text[]) to anon, authenticated;
 grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean)     to anon, authenticated;

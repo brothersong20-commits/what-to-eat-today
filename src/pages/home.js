@@ -1,5 +1,5 @@
-import { loadRestaurants, loadCafes, loadPolls, loadVotes } from '../lib/supabase.js';
-import { ATTENDANCE, categorySlug } from '../lib/config.js';
+import { loadRestaurants, loadCafes, loadPolls, loadVotes, loadLikes, toggleLike, subscribeLikes, unsubscribe } from '../lib/supabase.js';
+import { ATTENDANCE } from '../lib/config.js';
 import {
   isPastDeadline,
   clockParts,
@@ -7,15 +7,14 @@ import {
   formatEventDateTime
 } from '../lib/time.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
+import { categoryBadgeHtml } from '../components/category-badge.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { flipClockHtml, updateFlipClock } from '../components/flip-clock.js';
 import { shuffle } from '../lib/shuffle.js';
-
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}
+import { escapeHtml } from '../lib/escape.js';
+import { uniq } from '../lib/facets.js';
+import { getClientId } from '../lib/client-id.js';
+import { showToast } from '../lib/toast.js';
 
 export async function renderHome(app) {
   app.innerHTML = `
@@ -87,6 +86,83 @@ export async function renderHome(app) {
 
   const restaurantsPromise = loadRestaurants();
   const cafesPromise = loadCafes();
+
+  // ── 좋아요 상태 (식당·카페 둘러보기 공유) ────────────────────
+  // 출처는 likeCount/mine. 카드는 매 렌더 시 여기서 다시 그려지므로
+  // 필터 재렌더가 상태를 지우지 않는다. 토글·Realtime은 patch로 반영.
+  const clientId = getClientId();
+  const likeCount = new Map(); // `${type}:${id}` → 수
+  const mine = new Set();      // `${type}:${id}` (이 브라우저가 누른 것)
+
+  function rebuildLikes(rows) {
+    likeCount.clear();
+    mine.clear();
+    for (const l of rows) {
+      const k = `${l.entityType}:${l.entityId}`;
+      likeCount.set(k, (likeCount.get(k) || 0) + 1);
+      if (l.likerId === clientId) mine.add(k);
+    }
+  }
+  function likeOf(type, id) {
+    const k = `${type}:${id}`;
+    return { type, count: likeCount.get(k) || 0, liked: mine.has(k) };
+  }
+  function setLike(k, liked) {
+    const cur = likeCount.get(k) || 0;
+    const had = mine.has(k);
+    if (liked && !had) { mine.add(k); likeCount.set(k, cur + 1); }
+    else if (!liked && had) { mine.delete(k); likeCount.set(k, Math.max(0, cur - 1)); }
+  }
+  function patchVisibleLikes() {
+    app.querySelectorAll('.rc-like').forEach((btn) => {
+      const k = `${btn.dataset.likeType}:${btn.dataset.likeId}`;
+      const liked = mine.has(k);
+      btn.classList.toggle('is-liked', liked);
+      btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+      const c = btn.querySelector('.rc-like-count');
+      if (c) c.textContent = String(likeCount.get(k) || 0);
+    });
+  }
+  async function handleLikeClick(e) {
+    const btn = e.target.closest('.rc-like');
+    if (!btn) return;
+    const type = btn.dataset.likeType;
+    const id = btn.dataset.likeId;
+    const k = `${type}:${id}`;
+    const wasLiked = mine.has(k);
+    setLike(k, !wasLiked); // 낙관적
+    patchVisibleLikes();
+    try {
+      const { liked } = await toggleLike({ entityType: type, entityId: id, likerId: clientId });
+      if (liked !== mine.has(k)) { // 드리프트 시 권위 갱신
+        rebuildLikes(await loadLikes());
+        patchVisibleLikes();
+      }
+    } catch (err) {
+      setLike(k, wasLiked); // 롤백
+      patchVisibleLikes();
+      showToast(err.message || '좋아요 처리에 실패했습니다.', { error: true });
+    }
+  }
+
+  let likesRefreshHandle = null;
+  function scheduleLikesRefresh() {
+    if (likesRefreshHandle) clearTimeout(likesRefreshHandle);
+    likesRefreshHandle = setTimeout(() => {
+      loadLikes().then((rows) => { rebuildLikes(rows); patchVisibleLikes(); }).catch(() => {});
+    }, 300);
+  }
+
+  // 좋아요 로드는 카드 렌더를 막지 않는다 — 먼저 그리고 채워 넣는다(폴 카드와 동일 전략).
+  const likesReady = loadLikes()
+    .then(rebuildLikes)
+    .catch(() => { /* 실패 시 0으로 시작, 토글·Realtime으로 채워짐 */ });
+
+  const likesChannel = subscribeLikes(scheduleLikesRefresh);
+  window.addEventListener('hashchange', () => {
+    if (likesRefreshHandle) clearTimeout(likesRefreshHandle);
+    unsubscribe(likesChannel);
+  }, { once: true });
 
   loadPolls()
     .then(async (polls) => {
@@ -168,8 +244,8 @@ export async function renderHome(app) {
       return;
     }
 
-    const cafeCategories = [...new Set(cafes.map((c) => c.category).filter(Boolean))];
-    const cafeAreas = [...new Set(cafes.map((c) => c.area).filter(Boolean))];
+    const cafeCategories = uniq(cafes, 'category');
+    const cafeAreas = uniq(cafes, 'area');
     cafeFilterMount.innerHTML = filterBarHtml({
       categories: cafeCategories,
       areas: cafeAreas,
@@ -186,12 +262,14 @@ export async function renderHome(app) {
         cafeListEl.innerHTML = `<div class="state"><p>조건에 맞는 카페가 없습니다.</p></div>`;
         return;
       }
-      cafeListEl.innerHTML = filtered.map((c) => restaurantCardHtml(c, { mode: 'view' })).join('');
+      cafeListEl.innerHTML = filtered.map((c) => restaurantCardHtml(c, { mode: 'view', like: likeOf('cafe', c.id) })).join('');
     }
 
     cafes = shuffle(cafes);
     bindFilterBar(cafeFilterMount, cafeFilterState, renderCafes);
     renderCafes();
+    cafeListEl.addEventListener('click', handleLikeClick);
+    likesReady.then(patchVisibleLikes);
   })();
 
   // 식당 섹션도 카페와 동일하게 독립 렌더 — early return이 renderHome 전체를 중단하지 않도록.
@@ -215,8 +293,8 @@ export async function renderHome(app) {
       return;
     }
 
-    const categories = [...new Set(restaurants.map((r) => r.category).filter(Boolean))];
-    const areas = [...new Set(restaurants.map((r) => r.area).filter(Boolean))];
+    const categories = uniq(restaurants, 'category');
+    const areas = uniq(restaurants, 'area');
     filterMount.innerHTML = filterBarHtml({
       categories,
       areas,
@@ -233,12 +311,14 @@ export async function renderHome(app) {
         listEl.innerHTML = `<div class="state"><p>조건에 맞는 식당이 없습니다.</p></div>`;
         return;
       }
-      listEl.innerHTML = filtered.map((r) => restaurantCardHtml(r, { mode: 'view' })).join('');
+      listEl.innerHTML = filtered.map((r) => restaurantCardHtml(r, { mode: 'view', like: likeOf('restaurant', r.id) })).join('');
     }
 
     restaurants = shuffle(restaurants);
     bindFilterBar(filterMount, filterState, render);
     render();
+    listEl.addEventListener('click', handleLikeClick);
+    likesReady.then(patchVisibleLikes);
   })();
 }
 
@@ -269,11 +349,7 @@ function renderPollItem(p, stats, restaurantsById) {
             .map(
               (r) =>
                 `<li class="poll-cand">
-                  ${
-                    r.category
-                      ? `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>`
-                      : ''
-                  }
+                  ${categoryBadgeHtml(r.category)}
                   <span class="poll-cand-name">${escapeHtml(r.name)}</span>
                 </li>`
             )

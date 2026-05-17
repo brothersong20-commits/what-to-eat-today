@@ -13,12 +13,9 @@
 
 import { Wheel } from 'spin-wheel';
 import { categorySlug } from '../lib/config.js';
-
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}
+import { escapeHtml } from '../lib/escape.js';
+import { openModal } from '../lib/modal.js';
+import { categoryBadgeHtml } from './category-badge.js';
 
 // 카테고리 slug → tokens.css 전경색(흰 글자와 대비 충분).
 const CAT_FG = {
@@ -62,34 +59,8 @@ function buildItems(restaurants) {
 }
 
 function openSpinModal({ restaurants, onPick }) {
-  const overlay = document.createElement('div');
-  overlay.className = 'spin-modal-overlay';
-  overlay.innerHTML = `
-    <div class="spin-modal-card stack-3" role="dialog" aria-modal="true"
-         aria-label="식당 돌림판">
-      <button type="button" class="spin-modal-close" data-spin-close
-              aria-label="닫기">✕</button>
-      <h3 class="spin-modal-title">돌림판</h3>
-      <p class="text-soft fs-small">버튼을 누르면 후보 ${restaurants.length}곳 중 한 곳이 무작위로 선택돼요.</p>
-      <div class="spin-wheel-stage">
-        <div class="spin-wheel-pointer" aria-hidden="true"></div>
-        <div class="spin-wheel-canvas-wrap" data-spin-mount></div>
-      </div>
-      <div class="spin-wheel-result" data-spin-result hidden></div>
-      <div class="row-2 spin-wheel-actions">
-        <button type="button" class="btn btn-primary" data-spin-go>돌리기</button>
-      </div>
-    </div>
-  `;
-
-  const prevFocus = document.activeElement;
   let wheel = null;
   let spinning = false;
-
-  const mount = overlay.querySelector('[data-spin-mount]');
-  const goBtn = overlay.querySelector('[data-spin-go]');
-  const resultEl = overlay.querySelector('[data-spin-result]');
-  const closeBtn = overlay.querySelector('[data-spin-close]');
 
   function destroyWheel() {
     if (wheel) {
@@ -98,32 +69,67 @@ function openSpinModal({ restaurants, onPick }) {
     }
   }
 
-  function close() {
-    if (spinning) return;
-    document.removeEventListener('keydown', onKeydown);
-    window.removeEventListener('hashchange', close);
-    destroyWheel();
-    overlay.classList.remove('is-visible');
-    overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
-    // transition 미발생(reduced-motion 등) 대비 안전망
-    setTimeout(() => overlay.isConnected && overlay.remove(), 400);
-    if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
-  }
+  const { overlay, close } = openModal({
+    overlayClass: 'spin-modal-overlay',
+    html: `
+      <div class="spin-modal-card stack-3" role="dialog" aria-modal="true"
+           aria-label="식당 돌림판">
+        <button type="button" class="spin-modal-close" data-modal-close
+                aria-label="닫기">✕</button>
+        <h3 class="spin-modal-title">돌림판</h3>
+        <p class="text-soft fs-small">버튼을 누르면 후보 ${restaurants.length}곳 중 한 곳이 무작위로 선택돼요.</p>
+        <div class="spin-wheel-stage">
+          <div class="spin-wheel-pointer" aria-hidden="true"></div>
+          <div class="spin-wheel-canvas-wrap" data-spin-mount></div>
+        </div>
+        <div class="spin-wheel-result" data-spin-result hidden></div>
+        <div class="row-2 spin-wheel-actions">
+          <button type="button" class="btn btn-primary" data-spin-go>돌리기</button>
+        </div>
+      </div>
+    `,
+    canClose: () => !spinning,
+    onClose: destroyWheel,
+    // 오버레이가 DOM 에 붙고 is-visible 된 뒤 Wheel 생성 → 컨테이너 박스 메트릭 확정.
+    afterOpen: () => {
+      wheel = new Wheel(mount, {
+        items: buildItems(restaurants),
+        isInteractive: false,
+        radius: 0.92,
+        borderColor: '#1e3932',
+        borderWidth: 3,
+        lineColor: '#ffffff',
+        lineWidth: 1,
+        itemLabelColors: ['#ffffff'],
+        itemLabelFont: "'Inter', sans-serif",
+        itemLabelFontSizeMax: 18,
+        itemLabelRadius: 0.86,
+        itemLabelRadiusMax: 0.2,
+        itemLabelAlign: 'right',
+        pointerAngle: 0,
+        rotationSpeedMax: 700,
+        onRest: (e) => {
+          spinning = false;
+          goBtn.disabled = false;
+          goBtn.textContent = '돌리기';
+          const winner = restaurants[e.currentIndex];
+          if (winner) showResult(winner);
+        }
+      });
+    }
+  });
 
-  function onKeydown(e) {
-    if (e.key === 'Escape') close();
-  }
+  const mount = overlay.querySelector('[data-spin-mount]');
+  const goBtn = overlay.querySelector('[data-spin-go]');
+  const resultEl = overlay.querySelector('[data-spin-result]');
 
   function showResult(r) {
-    const slug = categorySlug(r.category);
     resultEl.hidden = false;
     resultEl.innerHTML = `
       <p class="spin-wheel-result-label">추천 식당</p>
       <p class="spin-wheel-result-name">
         ${escapeHtml(r.name)}
-        ${r.category
-          ? `<span class="rc-badge rc-badge--${slug}">${escapeHtml(r.category)}</span>`
-          : ''}
+        ${categoryBadgeHtml(r.category)}
       </p>
       <div class="row-2 spin-wheel-result-actions">
         <button type="button" class="btn btn-primary" data-spin-apply="1">1순위로 넣기</button>
@@ -158,44 +164,6 @@ function openSpinModal({ restaurants, onPick }) {
   }
 
   goBtn.addEventListener('click', doSpin);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
-  });
-  closeBtn.addEventListener('click', close);
-  document.addEventListener('keydown', onKeydown);
-  window.addEventListener('hashchange', close);
-
-  document.body.appendChild(overlay);
-  closeBtn.focus();
-
-  // 오버레이가 DOM 에 붙은 뒤 Wheel 생성 → 컨테이너 박스 메트릭 확정.
-  requestAnimationFrame(() => {
-    overlay.classList.add('is-visible');
-    wheel = new Wheel(mount, {
-      items: buildItems(restaurants),
-      isInteractive: false,
-      radius: 0.92,
-      borderColor: '#1e3932',
-      borderWidth: 3,
-      lineColor: '#ffffff',
-      lineWidth: 1,
-      itemLabelColors: ['#ffffff'],
-      itemLabelFont: "'Inter', sans-serif",
-      itemLabelFontSizeMax: 18,
-      itemLabelRadius: 0.86,
-      itemLabelRadiusMax: 0.2,
-      itemLabelAlign: 'right',
-      pointerAngle: 0,
-      rotationSpeedMax: 700,
-      onRest: (e) => {
-        spinning = false;
-        goBtn.disabled = false;
-        goBtn.textContent = '돌리기';
-        const winner = restaurants[e.currentIndex];
-        if (winner) showResult(winner);
-      }
-    });
-  });
 }
 
 export function bindSpinWheel(rootEl, { restaurants, onPick } = {}) {

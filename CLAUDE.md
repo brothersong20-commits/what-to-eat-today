@@ -35,6 +35,45 @@ npm run preview  # 빌드 결과 로컬 미리보기
                   → subscribeVotes (Realtime: postgres_changes on votes)
 ```
 
+## 코드 재사용 원칙 (새 바퀴 금지)
+
+새 코드를 쓰기 전에 **먼저 아래 공유 자산을 확인**한다. 같은 일을 하는 유틸이 이미
+있으면 재사용하고, 없으면 인라인 복붙 대신 기존 컨벤션(단일 책임 작은 모듈 —
+`verified-seal.js`/`heart-icon.js` 식 HTML 헬퍼, `escape.js`/`facets.js` 식 lib 유틸)을
+따라 새 모듈을 만든다. 단, "세 줄 복붙 < 잘못된 추상화" — 목적이 다른 단일 사용
+로직까지 억지로 합치지 말 것. 새 공유 모듈을 추가하면 아래 표도 갱신한다.
+
+### src/lib (순수 로직)
+
+| 모듈 | 공개 API | 용도 |
+|---|---|---|
+| `tally.js` | `tally(votes, restaurants)` | 1·2순위 가중치 랭킹 |
+| `time.js` | `isPastDeadline` `clockParts` `withinDeadlineDay` `formatEventDateTime` `formatRemaining` `deadlineUrgency` `isDeadlineAfterEvent` | 마감/이벤트 시간 계산·표시 |
+| `config.js` | `CATEGORIES` `categorySlug()` `ATTENDANCE` | 카테고리 slug·참석 enum |
+| `menus.js` | `parseMenusText` `serializeMenus` `compareMenu` `formatPrice` | 메뉴 텍스트 파싱·가격 포맷 |
+| `shuffle.js` | `shuffle(arr)` | 무작위 정렬 |
+| `escape.js` | `escapeHtml(s)` | innerHTML 직전 이스케이프 |
+| `facets.js` | `uniq(items, key)` | 필터용 고유값 추출 |
+| `client-id.js` | `getClientId()` | 좋아요용 익명 브라우저 id |
+| `voter.js` | `markVoted` `getVotedRecord` `hasVoted` | 투표 완료 브라우저 게이트 |
+| `toast.js` | `showToast(msg, opts)` | 토스트 피드백 |
+| `router.js` | `defineRoute` `start` `navigate` `currentPath` | 해시 라우터 |
+| `modal.js` | `openModal(opts)` | 오버레이 모달 수명주기·접근성 |
+| `supabase.js` | `loadRestaurants/Cafes/Polls/Votes/Likes` · `submitVote` · `create/update* RPC` · `subscribe*`/`unsubscribe` | 데이터 레이어 단일 진입점 |
+
+### src/components (HTML 헬퍼/위젯)
+
+| 모듈 | 공개 API | 용도 |
+|---|---|---|
+| `restaurant-card.js` | `restaurantCardHtml(r, opts)` | 식당/카페 카드 |
+| `category-badge.js` | `categoryBadgeHtml(cat)` `areaBadgeHtml(area)` | rc-badge pill |
+| `verified-seal.js` | `verifiedSealHtml()` | 단체회식 인증 씰 |
+| `heart-icon.js` | `heartSvg()` | 좋아요 하트 SVG |
+| `flip-clock.js` | `flipClockHtml()` `updateFlipClock()` | 플립 카운트다운 |
+| `filter-bar.js` | `filterBarHtml()` `bindFilterBar()` `applyFilter()` | 카테고리/지역/검색 필터 |
+| `share.js` | `buildShareUrl` `shareControlsHtml` `bindShareControls` `openQrModal` | 링크 복사·QR |
+| `spin-wheel.js` | `spinWheelButtonHtml()` `bindSpinWheel()` | 식당 돌림판 |
+
 ## 비명확한 핵심 규칙
 
 이 프로젝트에서 코드만 봐서는 즉시 보이지 않는 제약과 관습들. 변경 전 반드시 확인할 것.

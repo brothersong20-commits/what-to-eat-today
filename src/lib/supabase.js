@@ -99,6 +99,20 @@ export async function loadVotes(pollId) {
   }));
 }
 
+// 식당·카페 좋아요 전체. 앱 규모가 작아 한 번에 받아 클라이언트에서 집계한다.
+// (loadVotes와 동일한 단일 select + 매핑 패턴)
+export async function loadLikes() {
+  const { data, error } = await supabase
+    .from('likes')
+    .select('entity_type, entity_id, liker_id');
+  if (error) throw new Error(`좋아요 로딩 실패: ${error.message}`);
+  return (data || []).map((l) => ({
+    entityType: l.entity_type,
+    entityId: l.entity_id,
+    likerId: l.liker_id
+  }));
+}
+
 function mapPoll(r) {
   return {
     id: r.id,
@@ -149,6 +163,18 @@ export async function submitVote({ pollId, voterName, attendance, choice1Id, cho
   });
   if (error) throwTranslated(error);
   return { ok: true, updated: !!data };
+}
+
+// 좋아요 토글 (submitVote와 동일한 RPC 래퍼 패턴).
+// 반환 liked: true = 호출 후 좋아요 상태, false = 취소됨.
+export async function toggleLike({ entityType, entityId, likerId }) {
+  const { data, error } = await supabase.rpc('toggle_like', {
+    p_entity_type: entityType,
+    p_entity_id: entityId,
+    p_liker_id: likerId
+  });
+  if (error) throwTranslated(error);
+  return { ok: true, liked: !!data };
 }
 
 export async function createPoll({ adminKey, title, mealType, eventDate, eventTime, deadline, description, restaurantIds }) {
@@ -462,6 +488,19 @@ export function subscribeVotes(pollId, onChange) {
   return channel;
 }
 
+// 좋아요 변경 구독 (subscribeVotes 미러). 둘러보기는 다수 엔티티라 filter 없음.
+export function subscribeLikes(onChange) {
+  const channel = supabase
+    .channel('likes')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'likes' },
+      (payload) => onChange?.(payload)
+    )
+    .subscribe();
+  return channel;
+}
+
 export function unsubscribe(channel) {
   if (channel) supabase.removeChannel(channel);
 }
@@ -500,6 +539,7 @@ function translateError(code) {
     case 'id_already_exists':       return '같은 ID의 식당이 이미 있습니다.';
     case 'restaurant_not_found':    return '존재하지 않는 식당입니다.';
     case 'cafe_not_found':          return '존재하지 않는 카페입니다.';
+    case 'invalid_entity_type':     return '잘못된 항목 종류입니다.';
     case 'option_already_exists':   return '같은 분류 항목이 이미 있습니다.';
     case 'option_not_found':        return '존재하지 않는 분류 항목입니다.';
     case 'invalid_kind':            return '분류 종류 값이 올바르지 않습니다.';

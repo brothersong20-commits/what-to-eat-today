@@ -1,4 +1,4 @@
-import { loadRestaurants, loadPoll, submitVote } from '../lib/supabase.js';
+import { loadRestaurants, loadPoll, submitVote, loadLikes } from '../lib/supabase.js';
 import { isPastDeadline, clockParts, formatEventDateTime } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
 import { restaurantCardHtml } from '../components/restaurant-card.js';
@@ -10,12 +10,8 @@ import { hasVoted, getVotedRecord, markVoted } from '../lib/voter.js';
 import { shareControlsHtml, bindShareControls } from '../components/share.js';
 import { spinWheelButtonHtml, bindSpinWheel } from '../components/spin-wheel.js';
 import { shuffle } from '../lib/shuffle.js';
-
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}
+import { escapeHtml } from '../lib/escape.js';
+import { uniq } from '../lib/facets.js';
 
 export async function renderVote(app, { id: pollId }) {
   app.innerHTML = `
@@ -35,6 +31,7 @@ export async function renderVote(app, { id: pollId }) {
   const root = app.querySelector('#vote-root');
 
   let poll, restaurants;
+  const likeCountByRid = new Map(); // 식당 id → 좋아요 수 (투표 창은 표시 전용)
   try {
     const [loadedPoll, allRestaurants] = await Promise.all([loadPoll(pollId), loadRestaurants()]);
     poll = loadedPoll;
@@ -68,6 +65,15 @@ export async function renderVote(app, { id: pollId }) {
     root.querySelector('#go-home').addEventListener('click', () => navigate('/'));
     return;
   }
+
+  // 좋아요 수(표시 전용). 실패해도 투표는 진행 — 조용히 0으로 둔다.
+  try {
+    for (const l of await loadLikes()) {
+      if (l.entityType === 'restaurant') {
+        likeCountByRid.set(l.entityId, (likeCountByRid.get(l.entityId) || 0) + 1);
+      }
+    }
+  } catch { /* noop */ }
 
   if (hasVoted(poll.id)) {
     renderVotedSummary();
@@ -225,8 +231,8 @@ export async function renderVote(app, { id: pollId }) {
   const listEl = root.querySelector('#vote-list');
   const choiceSummary = root.querySelector('#choice-summary');
 
-  const categories = [...new Set(restaurants.map((r) => r.category).filter(Boolean))];
-  const areas = [...new Set(restaurants.map((r) => r.area).filter(Boolean))];
+  const categories = uniq(restaurants, 'category');
+  const areas = uniq(restaurants, 'area');
   filterMount.innerHTML = filterBarHtml({ categories, areas, selectedCategory: '', selectedArea: '', query: '' });
 
   function renderList() {
@@ -240,7 +246,8 @@ export async function renderVote(app, { id: pollId }) {
         restaurantCardHtml(r, {
           mode: 'choice',
           choice1Id: state.choice1Id,
-          choice2Id: state.choice2Id
+          choice2Id: state.choice2Id,
+          like: { type: 'restaurant', count: likeCountByRid.get(r.id) || 0, liked: false, readonly: true }
         })
       )
       .join('');

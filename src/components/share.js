@@ -11,12 +11,8 @@
 
 import qrcode from 'qrcode-generator';
 import { showToast } from '../lib/toast.js';
-
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}
+import { escapeHtml } from '../lib/escape.js';
+import { openModal } from '../lib/modal.js';
 
 export function buildShareUrl(pollId) {
   return `${location.href.split('#')[0]}#/vote/${pollId}`;
@@ -56,48 +52,18 @@ export function openQrModal({ url, title }) {
   qr.make();
   const svg = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
 
-  const overlay = document.createElement('div');
-  overlay.className = 'qr-modal-overlay';
-  overlay.innerHTML = `
-    <div class="qr-modal-card stack-3" role="dialog" aria-modal="true" aria-label="투표 공유 QR 코드">
-      <button type="button" class="qr-modal-close" data-qr-close aria-label="닫기">✕</button>
-      <h3 class="qr-modal-title">${escapeHtml(title || '투표 공유')}</h3>
-      <p class="text-soft fs-small">QR을 스캔하면 이 투표로 바로 이동합니다.</p>
-      <div class="qr-modal-svg">${svg}</div>
-      <p class="qr-modal-url">${escapeHtml(url)}</p>
-    </div>
-  `;
-
-  const prevFocus = document.activeElement;
-
-  function close() {
-    document.removeEventListener('keydown', onKeydown);
-    window.removeEventListener('hashchange', close);
-    overlay.classList.remove('is-visible');
-    overlay.addEventListener(
-      'transitionend',
-      () => overlay.remove(),
-      { once: true }
-    );
-    // transition 미발생(reduced-motion 등) 대비 안전망
-    setTimeout(() => overlay.isConnected && overlay.remove(), 400);
-    if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
-  }
-
-  function onKeydown(e) {
-    if (e.key === 'Escape') close();
-  }
-
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
+  openModal({
+    overlayClass: 'qr-modal-overlay',
+    html: `
+      <div class="qr-modal-card stack-3" role="dialog" aria-modal="true" aria-label="투표 공유 QR 코드">
+        <button type="button" class="qr-modal-close" data-modal-close aria-label="닫기">✕</button>
+        <h3 class="qr-modal-title">${escapeHtml(title || '투표 공유')}</h3>
+        <p class="text-soft fs-small">QR을 스캔하면 이 투표로 바로 이동합니다.</p>
+        <div class="qr-modal-svg">${svg}</div>
+        <p class="qr-modal-url">${escapeHtml(url)}</p>
+      </div>
+    `
   });
-  overlay.querySelector('[data-qr-close]').addEventListener('click', close);
-  document.addEventListener('keydown', onKeydown);
-  window.addEventListener('hashchange', close);
-
-  document.body.appendChild(overlay);
-  overlay.querySelector('[data-qr-close]').focus();
-  requestAnimationFrame(() => overlay.classList.add('is-visible'));
 }
 
 export function bindShareControls(rootEl, { pollId, title } = {}) {

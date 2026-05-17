@@ -861,6 +861,7 @@ textarea {
 }
 
 .restaurant-card {
+  position: relative;
   background: var(--surface-card);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
@@ -869,6 +870,69 @@ textarea {
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
+}
+
+/* 좋아요 하트 — 카드 우상단 오버레이(썸네일 위/패딩 위 모두 대응) */
+.rc-like {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.5rem 0.9rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-float);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--duration) var(--ease), transform var(--duration) var(--ease);
+}
+.rc-like .rc-heart {
+  width: 1.7rem;
+  height: 1.7rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  transition: fill var(--duration) var(--ease);
+}
+.rc-like:hover {
+  color: var(--danger);
+}
+.rc-like:active {
+  transform: scale(var(--press-scale));
+}
+.rc-like:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+.rc-like.is-liked {
+  color: var(--danger);
+}
+.rc-like.is-liked .rc-heart {
+  fill: currentColor;
+  stroke: none;
+}
+.rc-like-count {
+  min-width: 1ch;
+  text-align: center;
+}
+/* 표시 전용 (투표 창) — 클릭·호버 반응 없음 */
+.rc-like--readonly {
+  cursor: default;
+}
+.rc-like--readonly:hover {
+  color: var(--text-soft);
+}
+.rc-like--readonly.is-liked,
+.rc-like--readonly.is-liked:hover {
+  color: var(--danger);
 }
 
 /* 식당 썸네일 — 카드 상단 커버 / 관리자 행 / 결과 랭킹 / 폼 미리보기 */

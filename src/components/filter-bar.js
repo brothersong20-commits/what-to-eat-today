@@ -1,13 +1,6 @@
 import { categorySlug } from '../lib/config.js';
+import { escapeHtml } from '../lib/escape.js';
 import { verifiedSealHtml } from './verified-seal.js';
-
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 export function filterBarHtml({ categories, areas = [], selectedCategory, selectedArea, query, searchPlaceholder = '식당명 검색', groupDining = false }) {
   const categoryChips = ['전체', ...categories]

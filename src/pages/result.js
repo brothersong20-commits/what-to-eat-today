@@ -4,12 +4,7 @@ import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/tim
 import { ATTENDANCE } from '../lib/config.js';
 import { navigate } from '../lib/router.js';
 import { hasVoted } from '../lib/voter.js';
-
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}
+import { escapeHtml } from '../lib/escape.js';
 
 // 실시간 재렌더 시 이 부분만 교체된다 — 헤더/버튼은 바깥에 두어 바인딩을 유지한다.
 function tallyBodyHtml(result) {
