@@ -409,8 +409,10 @@ textarea {
 .chip--etc.is-active { background: var(--cat-etc-fg); border-color: var(--cat-etc-fg); color: #fff; }
 .chip--area:hover { border-color: var(--area-fg); color: var(--area-fg); }
 .chip--area.is-active { background: var(--area-fg); border-color: var(--area-fg); color: #fff; }
-.chip--group-dining:hover { border-color: var(--badge-group-dining-fg); color: var(--badge-group-dining-fg); }
-.chip--group-dining.is-active { background: var(--badge-group-dining-fg); border-color: var(--badge-group-dining-fg); color: #fff; }
+.chip--group-dining { display: inline-flex; align-items: center; gap: 0.5rem; }
+.chip--group-dining .rc-verified { margin-left: 0; vertical-align: 0; }
+.chip--group-dining:hover { border-color: var(--verified-seal-to); color: var(--verified-seal-to); }
+.chip--group-dining.is-active { background: var(--verified-seal-to); border-color: var(--verified-seal-to); color: #fff; }
 
 /* ───── State messages ───── */
 .state {
@@ -927,6 +929,13 @@ textarea {
   color: var(--text-strong);
   overflow-wrap: anywhere;
 }
+.rc-verified {
+  display: inline-flex;
+  vertical-align: -0.18em;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+.rc-verified svg { display: block; width: 100%; height: 100%; }
 .rc-meta-row {
   display: flex;
   flex-wrap: wrap;
@@ -952,7 +961,6 @@ textarea {
 .rc-badge--gogi { background: var(--cat-gogi-bg); color: var(--cat-gogi-fg); }
 .rc-badge--etc { background: var(--cat-etc-bg); color: var(--cat-etc-fg); }
 .rc-badge--area { background: var(--area-bg); color: var(--area-fg); }
-.rc-badge--group-dining { background: var(--badge-group-dining-bg); color: var(--badge-group-dining-fg); }
 .rc-meta {
   font-size: 1.3rem;
   color: var(--text-soft);
@@ -1774,7 +1782,7 @@ textarea {
 .rf-checkbox input[type='checkbox'] {
   width: 1.8rem;
   height: 1.8rem;
-  accent-color: var(--badge-group-dining-fg);
+  accent-color: var(--verified-seal-to);
   cursor: pointer;
 }
 

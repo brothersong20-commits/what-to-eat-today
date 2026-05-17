@@ -7,6 +7,7 @@ import { tally } from '../lib/tally.js';
 import { isPastDeadline, formatRemaining, formatEventDateTime, deadlineUrgency, isDeadlineAfterEvent } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
 import { buildShareUrl, openQrModal } from '../components/share.js';
+import { verifiedSealHtml } from '../components/verified-seal.js';
 
 const STORAGE_KEY = 'wte_admin_key';
 
@@ -740,7 +741,7 @@ function mountRestaurantPicker(els, restaurants, opts = {}) {
       const isRemoved = removedSet.has(r.id) && !selectedIds.has(r.id);
       const badges = `
         ${r.category ? `<span class="rc-badge">${escapeHtml(r.category)}</span>` : ''}
-        ${r.isGroupDining ? `<span class="rc-badge rc-badge--group-dining">단체 회식</span>` : ''}
+        ${r.isGroupDining ? verifiedSealHtml({ size: '1.6rem' }) : ''}
         ${isRemoved ? `<span class="removed-badge">취소됨</span>` : ''}
       `;
       const disabledAttr = disabled ? 'disabled' : '';
@@ -1591,7 +1592,7 @@ function restaurantRowHtml(r, isEditing) {
       <span class="rest-id">${escapeHtml(r.id)}</span>
       ${r.category ? `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>` : ''}
       ${r.area ? `<span class="rc-badge rc-badge--area">${escapeHtml(r.area)}</span>` : ''}
-      ${r.isGroupDining ? `<span class="rc-badge rc-badge--group-dining">단체 회식</span>` : ''}
+      ${r.isGroupDining ? verifiedSealHtml({ size: '1.6rem' }) : ''}
       <span class="rest-name">${escapeHtml(r.name)}</span>
       ${r.naverUrl ? `<a class="rest-naver" href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
       <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>

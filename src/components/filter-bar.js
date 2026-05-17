@@ -1,4 +1,5 @@
 import { categorySlug } from '../lib/config.js';
+import { verifiedSealHtml } from './verified-seal.js';
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -36,8 +37,8 @@ export function filterBarHtml({ categories, areas = [], selectedCategory, select
     : '';
 
   const groupDiningRow = groupDining
-    ? `<div class="chip-row" id="filter-group-dining" role="group" aria-label="단체 회식 필터">
-        <button type="button" class="chip chip--group-dining" data-group-dining aria-pressed="false">단체 회식만</button>
+    ? `<div class="chip-row" id="filter-group-dining" role="group" aria-label="단체회식 가능 (10인 이상) 필터">
+        <button type="button" class="chip chip--group-dining" data-group-dining aria-pressed="false">${verifiedSealHtml({ size: '1.6rem', decorative: true })}<span>단체회식 가능 (10인 이상)</span></button>
       </div>`
     : '';
 

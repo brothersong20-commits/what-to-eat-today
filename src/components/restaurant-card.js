@@ -1,5 +1,6 @@
 import { formatPrice, compareMenu } from '../lib/menus.js';
 import { categorySlug } from '../lib/config.js';
+import { verifiedSealHtml } from './verified-seal.js';
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -32,7 +33,6 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
   const meta = [
     r.category && `<span class="rc-badge rc-badge--${categorySlug(r.category)}">${escapeHtml(r.category)}</span>`,
     r.area && `<span class="rc-badge rc-badge--area">${escapeHtml(r.area)}</span>`,
-    r.isGroupDining && `<span class="rc-badge rc-badge--group-dining">단체 회식</span>`,
     r.walkingMinutes != null && `<span class="rc-meta">🚶 도보 ${r.walkingMinutes}분</span>`
   ]
     .filter(Boolean)
@@ -77,7 +77,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
     <article class="restaurant-card" data-id="${escapeHtml(r.id)}">
       ${thumb}
       <header class="rc-header">
-        <h3 class="rc-name">${escapeHtml(r.name)}</h3>
+        <h3 class="rc-name">${escapeHtml(r.name)}${r.isGroupDining ? verifiedSealHtml() : ''}</h3>
         <div class="rc-meta-row">${meta}</div>
       </header>
 
