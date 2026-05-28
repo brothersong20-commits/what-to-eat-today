@@ -41,7 +41,8 @@ function mapRestaurant(r) {
     businessHours: r.business_hours || '',
     active: !!r.active,
     isGroupDining: !!r.is_group_dining,
-    menuImageUrls: Array.isArray(r.menu_image_urls) ? r.menu_image_urls : []
+    menuImageUrls: Array.isArray(r.menu_image_urls) ? r.menu_image_urls : [],
+    closedDays: Array.isArray(r.closed_days) ? r.closed_days : []
   };
 }
 
@@ -68,7 +69,8 @@ function mapCafe(c) {
     note: c.note || '',
     businessHours: c.business_hours || '',
     active: !!c.active,
-    menuImageUrls: Array.isArray(c.menu_image_urls) ? c.menu_image_urls : []
+    menuImageUrls: Array.isArray(c.menu_image_urls) ? c.menu_image_urls : [],
+    closedDays: Array.isArray(c.closed_days) ? c.closed_days : []
   };
 }
 
@@ -231,7 +233,7 @@ export async function updatePoll({ adminKey, pollId, patch }) {
 // ─────────────────────────────────────────────────────────
 // 식당 CRUD (관리자)
 // ─────────────────────────────────────────────────────────
-export async function createRestaurant({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, businessHours, active, isGroupDining, menuImageUrls }) {
+export async function createRestaurant({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, capacityRoom, capacityHall, menusText, note, businessHours, active, isGroupDining, menuImageUrls, closedDays }) {
   const { data, error } = await supabase.rpc('create_restaurant', {
     p_admin_key: adminKey || '',
     p_id: id,
@@ -249,7 +251,8 @@ export async function createRestaurant({ adminKey, id, name, category, area, add
     p_business_hours: businessHours || null,
     p_active: active !== false,
     p_is_group_dining: !!isGroupDining,
-    p_menu_image_urls: (menuImageUrls && menuImageUrls.length) ? menuImageUrls : null
+    p_menu_image_urls: (menuImageUrls && menuImageUrls.length) ? menuImageUrls : null,
+    p_closed_days: Array.isArray(closedDays) ? closedDays : null
   });
   if (error) throwTranslated(error);
   return { ok: true, id: data };
@@ -277,7 +280,8 @@ export async function updateRestaurant({ adminKey, id, patch }) {
     p_clear_capacity_room: false,
     p_clear_capacity_hall: false,
     p_is_group_dining: null,
-    p_menu_image_urls: null
+    p_menu_image_urls: null,
+    p_closed_days: null
   };
   const p = patch || {};
   if (p.name !== undefined) params.p_name = p.name;
@@ -307,6 +311,7 @@ export async function updateRestaurant({ adminKey, id, patch }) {
   if (p.active !== undefined) params.p_active = p.active;
   if (p.isGroupDining !== undefined) params.p_is_group_dining = p.isGroupDining;
   if (p.menuImageUrls !== undefined) params.p_menu_image_urls = p.menuImageUrls;
+  if (p.closedDays !== undefined) params.p_closed_days = Array.isArray(p.closedDays) ? p.closedDays : [];
 
   const { error } = await supabase.rpc('update_restaurant', params);
   if (error) throwTranslated(error);
@@ -344,7 +349,7 @@ export async function setRestaurantActive({ adminKey, id, active }) {
 // ─────────────────────────────────────────────────────────
 // 카페 CRUD (관리자) — 식당 함수 미러, capacity_* 제외
 // ─────────────────────────────────────────────────────────
-export async function createCafe({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, active, menuImageUrls }) {
+export async function createCafe({ adminKey, id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, active, menuImageUrls, closedDays }) {
   const { data, error } = await supabase.rpc('create_cafe', {
     p_admin_key: adminKey || '',
     p_id: id,
@@ -359,7 +364,8 @@ export async function createCafe({ adminKey, id, name, category, area, address, 
     p_note: note || null,
     p_business_hours: businessHours || null,
     p_active: active !== false,
-    p_menu_image_urls: (menuImageUrls && menuImageUrls.length) ? menuImageUrls : null
+    p_menu_image_urls: (menuImageUrls && menuImageUrls.length) ? menuImageUrls : null,
+    p_closed_days: Array.isArray(closedDays) ? closedDays : null
   });
   if (error) throwTranslated(error);
   return { ok: true, id: data };
@@ -382,7 +388,8 @@ export async function updateCafe({ adminKey, id, patch }) {
     p_active: null,
     p_clear_naver_url: false,
     p_clear_image_url: false,
-    p_menu_image_urls: null
+    p_menu_image_urls: null,
+    p_closed_days: null
   };
   const p = patch || {};
   if (p.name !== undefined) params.p_name = p.name;
@@ -403,6 +410,7 @@ export async function updateCafe({ adminKey, id, patch }) {
   if (p.businessHours !== undefined) params.p_business_hours = p.businessHours;
   if (p.active !== undefined) params.p_active = p.active;
   if (p.menuImageUrls !== undefined) params.p_menu_image_urls = p.menuImageUrls;
+  if (p.closedDays !== undefined) params.p_closed_days = Array.isArray(p.closedDays) ? p.closedDays : [];
 
   const { error } = await supabase.rpc('update_cafe', params);
   if (error) throwTranslated(error);

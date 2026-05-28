@@ -46,6 +46,15 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
     ? `<p class="rc-hours">🕒 ${escapeHtml(r.businessHours)}</p>`
     : '';
 
+  const closedDaysRow = (r.closedDays && r.closedDays.length)
+    ? `<p class="rc-closed-days"><span class="rc-closed-label">🚫 휴무</span>${
+        ['월','화','수','목','금','토','일'].map((d) => {
+          const off = r.closedDays.includes(d);
+          return `<span class="rc-day-chip${off ? ' is-off' : ''}">${d}</span>`;
+        }).join('')
+      }</p>`
+    : '';
+
   const mapLink = r.naverUrl
     ? `<a href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" class="rc-map-link" aria-label="네이버 지도에서 보기">↗</a>`
     : '';
@@ -96,6 +105,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
       ${addressRow}
       ${noteRow}
       ${hoursRow}
+      ${closedDaysRow}
 
       ${
         menus || menuBoardChip

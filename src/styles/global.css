@@ -1067,6 +1067,83 @@ textarea {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.rc-closed-days {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 1.3rem;
+  color: var(--text-soft);
+}
+.rc-closed-label {
+  margin-right: 0.4rem;
+}
+.rc-day-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  padding: 0.1rem 0.6rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--text-mute);
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.rc-day-chip.is-off {
+  background: var(--cat-han-bg);
+  border-color: var(--cat-han-fg);
+  color: var(--cat-han-fg);
+  font-weight: 700;
+}
+
+/* 관리자 폼 — 정기휴무 요일 토글 (label[has(input:checked)] 패턴) */
+.closed-days-toggle {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+.day-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4rem;
+  padding: 0.8rem 1.2rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-input);
+  background: var(--surface-card);
+  color: var(--text-soft);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration) var(--ease),
+    color var(--duration) var(--ease),
+    border-color var(--duration) var(--ease);
+}
+.day-toggle:hover {
+  border-color: var(--text-soft);
+}
+.day-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+.day-toggle:has(input:checked) {
+  background: var(--cat-han-bg);
+  border-color: var(--cat-han-fg);
+  color: var(--cat-han-fg);
+  font-weight: 700;
+}
+.day-toggle:focus-within {
+  outline: 2px solid var(--green-accent);
+  outline-offset: 2px;
+}
 .rc-address {
   display: flex;
   align-items: center;

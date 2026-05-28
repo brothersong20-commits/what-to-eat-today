@@ -1211,20 +1211,21 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
     }
 
     const isGroupDining = mount.querySelector('#rf-group-dining')?.checked || false;
+    const closedDays = [...mount.querySelectorAll('.rf-closed-day:checked')].map((el) => el.value);
 
     try {
       if (editing) {
         await updateRestaurant({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining, menuImageUrls }
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining, menuImageUrls, closedDays }
         });
         showToast('수정되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createRestaurant({
           adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining, menuImageUrls
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining, menuImageUrls, closedDays
         });
         showToast('식당이 추가되었습니다');
         renderRestaurantsTab(mount, shellRoot, { editingId: id });
@@ -1426,20 +1427,21 @@ async function renderCafesTab(mount, shellRoot, { editingId = null } = {}) {
       showToast('메뉴판 이미지 URL은 모두 http(s)://로 시작해야 합니다', { error: true });
       return;
     }
+    const closedDays = [...mount.querySelectorAll('.rf-closed-day:checked')].map((el) => el.value);
 
     try {
       if (editing) {
         await updateCafe({
           adminKey: getStoredKey(),
           id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls }
+          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls, closedDays }
         });
         showToast('수정되었습니다');
         renderCafesTab(mount, shellRoot, { editingId: editing.id });
       } else {
         await createCafe({
           adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls
+          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls, closedDays
         });
         showToast('카페가 추가되었습니다');
         renderCafesTab(mount, shellRoot, { editingId: id });
@@ -1691,6 +1693,18 @@ function restaurantFormHtml(r, opts = {}) {
         <div class="stack-3">
           <label class="field-label" for="rf-business-hours">영업시간</label>
           <input type="text" id="rf-business-hours" class="input" value="${escapeHtml(v.businessHours || '')}" placeholder="예: 매일 11:00–21:00 (브레이크 15:00–17:00)" />
+        </div>
+        <div class="stack-3">
+          <span class="field-label">정기휴무 (요일 선택)</span>
+          <div class="closed-days-toggle" role="group" aria-label="정기휴무 요일">
+            ${['월','화','수','목','금','토','일'].map((d, i) => `
+              <label class="day-toggle">
+                <input type="checkbox" class="rf-closed-day" id="rf-closed-day-${i}" value="${d}" ${(v.closedDays || []).includes(d) ? 'checked' : ''} />
+                <span>${d}</span>
+              </label>
+            `).join('')}
+          </div>
+          <p class="text-soft fs-small">체크한 요일은 카드에 정기휴무로 표시됩니다.</p>
         </div>
         <div class="stack-3">
           <label class="field-label" for="rf-address">주소</label>

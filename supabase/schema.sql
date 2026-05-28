@@ -47,6 +47,7 @@ alter table public.restaurants add column if not exists area text;
 alter table public.restaurants add column if not exists business_hours text;
 alter table public.restaurants add column if not exists is_group_dining boolean not null default false;
 alter table public.restaurants add column if not exists menu_image_urls text[] not null default '{}';
+alter table public.restaurants add column if not exists closed_days text[] not null default '{}';
 
 -- 카페 — restaurants와 동일 구조에서 회식 수용인원(capacity_*)만 제외.
 -- 점심 식사 후 둘러볼 카페 목록. 투표 후보가 아니라 단순 조회용.
@@ -68,6 +69,7 @@ alter table public.cafes add column if not exists area text;
 alter table public.cafes add column if not exists image_url text;
 alter table public.cafes add column if not exists business_hours text;
 alter table public.cafes add column if not exists menu_image_urls text[] not null default '{}';
+alter table public.cafes add column if not exists closed_days text[] not null default '{}';
 
 create table if not exists public.polls (
   id                     text primary key,
@@ -403,7 +405,8 @@ create or replace function public.create_restaurant(
   p_business_hours  text default null,
   p_active          boolean default true,
   p_is_group_dining boolean default false,
-  p_menu_image_urls text[] default null
+  p_menu_image_urls text[] default null,
+  p_closed_days     text[] default null
 ) returns text
 language plpgsql
 security definer
@@ -424,7 +427,7 @@ begin
   end if;
 
   insert into public.restaurants (
-    id, name, category, area, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, business_hours, active, is_group_dining, menu_image_urls
+    id, name, category, area, address, naver_url, image_url, walking_minutes, capacity_room, capacity_hall, menus_text, note, business_hours, active, is_group_dining, menu_image_urls, closed_days
   ) values (
     btrim(p_id), btrim(p_name),
     nullif(btrim(coalesce(p_category, '')), ''),
@@ -440,7 +443,8 @@ begin
     nullif(btrim(coalesce(p_business_hours, '')), ''),
     coalesce(p_active, true),
     coalesce(p_is_group_dining, false),
-    coalesce(p_menu_image_urls, '{}')
+    coalesce(p_menu_image_urls, '{}'),
+    coalesce(p_closed_days, '{}')
   );
 
   return p_id;
@@ -479,7 +483,8 @@ create or replace function public.update_restaurant(
   p_clear_capacity_room  boolean default false,
   p_clear_capacity_hall  boolean default false,
   p_is_group_dining      boolean default null,
-  p_menu_image_urls      text[] default null
+  p_menu_image_urls      text[] default null,
+  p_closed_days          text[] default null
 ) returns void
 language plpgsql
 security definer
@@ -527,7 +532,8 @@ begin
       business_hours  = coalesce(nullif(btrim(p_business_hours), ''), business_hours),
       active          = coalesce(p_active, active),
       is_group_dining = coalesce(p_is_group_dining, is_group_dining),
-      menu_image_urls = coalesce(p_menu_image_urls, menu_image_urls)
+      menu_image_urls = coalesce(p_menu_image_urls, menu_image_urls),
+      closed_days     = coalesce(p_closed_days, closed_days)
   where id = p_id;
 end;
 $$;
@@ -628,7 +634,8 @@ create or replace function public.create_cafe(
   p_note            text default null,
   p_business_hours  text default null,
   p_active          boolean default true,
-  p_menu_image_urls text[] default null
+  p_menu_image_urls text[] default null,
+  p_closed_days     text[] default null
 ) returns text
 language plpgsql
 security definer
@@ -649,7 +656,7 @@ begin
   end if;
 
   insert into public.cafes (
-    id, name, category, area, address, naver_url, image_url, walking_minutes, menus_text, note, business_hours, active, menu_image_urls
+    id, name, category, area, address, naver_url, image_url, walking_minutes, menus_text, note, business_hours, active, menu_image_urls, closed_days
   ) values (
     btrim(p_id), btrim(p_name),
     nullif(btrim(coalesce(p_category, '')), ''),
@@ -662,7 +669,8 @@ begin
     nullif(btrim(coalesce(p_note, '')), ''),
     nullif(btrim(coalesce(p_business_hours, '')), ''),
     coalesce(p_active, true),
-    coalesce(p_menu_image_urls, '{}')
+    coalesce(p_menu_image_urls, '{}'),
+    coalesce(p_closed_days, '{}')
   );
 
   return p_id;
@@ -696,7 +704,8 @@ create or replace function public.update_cafe(
   p_active          boolean default null,
   p_clear_naver_url boolean default false,
   p_clear_image_url boolean default false,
-  p_menu_image_urls text[] default null
+  p_menu_image_urls text[] default null,
+  p_closed_days     text[] default null
 ) returns void
 language plpgsql
 security definer
@@ -733,7 +742,8 @@ begin
       note            = coalesce(nullif(btrim(p_note), ''),       note),
       business_hours  = coalesce(nullif(btrim(p_business_hours), ''), business_hours),
       active          = coalesce(p_active, active),
-      menu_image_urls = coalesce(p_menu_image_urls, menu_image_urls)
+      menu_image_urls = coalesce(p_menu_image_urls, menu_image_urls),
+      closed_days     = coalesce(p_closed_days, closed_days)
   where id = p_id;
 end;
 $$;
