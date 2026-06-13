@@ -1830,8 +1830,31 @@ textarea {
   color: var(--green-starbucks);
   border-bottom-color: var(--green-accent);
 }
-.admin-logout {
+/* 탭 바 우측 그룹: 로그인 계정 + 로그아웃 */
+.admin-tabs-right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.admin-user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.3rem;
+  color: var(--text-soft);
+}
+.admin-user-dot {
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--green-accent);
+  box-shadow: 0 0 0 0.3rem var(--green-light);
 }
 
 /* 홈 둘러보기 탭 (식당 / 카페) — admin-tab과 동일 시각 패턴 */

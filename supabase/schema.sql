@@ -3,26 +3,68 @@
 -- 이미 한 번 실행한 적이 있으면 멱등하게 다시 실행 가능 (drop이 아니라 create or replace).
 
 -- ─────────────────────────────────────────────────────────
--- 0. ADMIN_KEY 보관 — private schema의 설정 테이블
---    Supabase 호스팅에서 ALTER DATABASE 권한이 없어 GUC 대신 테이블 사용.
---    private schema는 anon/authenticated에 GRANT를 주지 않아 클라이언트가 직접 SELECT 불가.
---    RPC가 security definer로 우회해서 읽는다.
---    값을 바꾸려면:
---      update private.app_config set value = '새 값' where key = 'admin_key';
+-- 0. private 스키마 — 관리자 전용 데이터(allowlist) 보관.
+--    anon/authenticated에 GRANT가 없어 클라이언트가 직접 SELECT 불가.
+--    여기 객체는 security definer 함수(is_admin 등)로만 우회 접근한다.
+--    (구 버전의 공유 비밀번호 테이블 private.app_config 는 구글 OAuth 전환으로 제거됨.)
 -- ─────────────────────────────────────────────────────────
 create schema if not exists private;
 revoke all on schema private from anon, authenticated;
+drop table if exists private.app_config;
 
-create table if not exists private.app_config (
-  key   text primary key,
-  value text not null
+-- ─────────────────────────────────────────────────────────
+-- 0b. 관리자 허용목록 + 신원 검증 (구글 OAuth)
+--    관리자 인증을 "공유 비밀번호" → "구글 로그인 + 이메일 허용목록"으로 전환.
+--    아래 allowlist에 등록된 이메일의 구글 계정으로 로그인한 사용자만 관리자다.
+--    관리자 추가/삭제는 이 테이블에 행을 넣고 빼면 된다:
+--      insert into private.admin_allowlist (email) values ('someone@gmail.com');
+--      delete from private.admin_allowlist where email = 'someone@gmail.com';
+-- ─────────────────────────────────────────────────────────
+create table if not exists private.admin_allowlist (
+  email      text primary key,
+  created_at timestamptz not null default now()
 );
 
--- 최초 설치 시에만 기본 admin_key를 심는다. 재실행해도 기존 값을 덮어쓰지 않도록
--- do nothing (do update 였다면 schema.sql 재실행마다 운영 키가 'test123'으로 초기화됨).
--- 키 변경은 운영 절차대로: update private.app_config set value = '...' where key = 'admin_key';
-insert into private.app_config (key, value) values ('admin_key', 'test123')
-on conflict (key) do nothing;
+-- 관리자 시드(멱등). 추가/삭제는 이 테이블에 직접 insert/delete 하면 된다.
+insert into private.admin_allowlist (email) values ('brothersong20@gmail.com')
+on conflict (email) do nothing;
+
+-- 현재 요청자(로그인 토큰)가 관리자인지 — JWT의 email이 allowlist에 있는지 검사.
+-- security definer라 private 테이블을 읽을 수 있다. auth.jwt()는 요청별 클레임이라
+-- definer 실행이어도 호출자의 토큰을 그대로 본다(세션 GUC라 우회 안 됨).
+create or replace function private.is_admin() returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from private.admin_allowlist a
+    where lower(a.email) = lower(coalesce(
+            auth.jwt() ->> 'email',
+            auth.jwt() -> 'user_metadata' ->> 'email'
+          ))
+      -- 이메일 검증 플래그가 명시적으로 false일 때만 차단(구글만 활성화 → 보통 true/없음).
+      and coalesce(
+            (auth.jwt() -> 'user_metadata' ->> 'email_verified')::boolean,
+            (auth.jwt() ->> 'email_verified')::boolean,
+            true
+          ) is true
+  );
+$$;
+
+-- (구) 전환기 게이트 private.is_admin_or_key 는 OAuth 전환 완료로 제거. 멱등 재실행 시 정리.
+drop function if exists private.is_admin_or_key(text);
+
+-- 클라이언트가 "지금 로그인한 내가 관리자인가?"를 물어 UI를 분기하기 위한 공개 RPC.
+create or replace function public.is_current_user_admin() returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$ select private.is_admin() $$;
+grant execute on function public.is_current_user_admin() to anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────
 -- 1. 테이블
@@ -280,13 +322,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_expected text;
   v_id       text;
   v_base     text := 'P' || to_char((now() at time zone 'Asia/Seoul')::date, 'YYYYMMDD');
   v_n        int := 2;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if p_title is null or btrim(p_title) = ''
@@ -349,13 +389,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_expected text;
   v_old_ids  text[];
   v_removed  text[];
   v_new_removed text[];
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if p_poll_id is null or btrim(p_poll_id) = '' then
@@ -450,11 +488,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if p_id is null or btrim(p_id) = '' or p_name is null or btrim(p_name) = '' then
@@ -528,11 +563,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if not exists (select 1 from public.restaurants where id = p_id) then
@@ -584,11 +616,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if not exists (select 1 from public.restaurants where id = p_id) then
@@ -606,11 +635,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if not exists (select 1 from public.polls where id = p_poll_id) then
@@ -630,11 +656,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if not exists (select 1 from public.restaurants where id = p_id) then
@@ -683,11 +706,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if p_id is null or btrim(p_id) = '' or p_name is null or btrim(p_name) = '' then
@@ -753,11 +773,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if not exists (select 1 from public.cafes where id = p_id) then
@@ -798,11 +815,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if not exists (select 1 from public.cafes where id = p_id) then
@@ -821,11 +835,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_expected text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if not exists (select 1 from public.cafes where id = p_id) then
@@ -936,11 +947,9 @@ security definer
 set search_path = public
 as $$
 declare
-  v_expected text;
   v_value    text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if p_kind not in ('category', 'area', 'cafe_category') then
@@ -974,12 +983,10 @@ security definer
 set search_path = public
 as $$
 declare
-  v_expected text;
   v_old      text;
   v_new      text;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   if p_kind not in ('category', 'area', 'cafe_category') then
@@ -1024,11 +1031,9 @@ security definer
 set search_path = public
 as $$
 declare
-  v_expected text;
   v_count    int;
 begin
-  select value into v_expected from private.app_config where key = 'admin_key';
-  if v_expected is null or v_expected = '' or v_expected <> coalesce(p_admin_key, '') then
+  if not private.is_admin() then
     raise exception 'unauthorized';
   end if;
   delete from public.app_options where kind = p_kind and value = btrim(coalesce(p_value, ''));

@@ -9,9 +9,61 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 }
 
 // 모듈 내부 전용 클라이언트. 외부는 이 파일의 load*/RPC 래퍼 함수만 사용한다(직접 import 금지).
+// 관리자 인증은 구글 OAuth(Supabase Auth) — 세션을 localStorage에 유지하고, 로그인 토큰을
+// 모든 요청에 자동 첨부한다. flowType:'pkce'는 콜백을 ?code= 쿼리로 받아 해시 라우터(#/admin)와
+// 충돌하지 않게 한다(implicit 플로우의 #access_token= 프래그먼트가 해시 경로를 깨뜨리는 문제 회피).
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false }
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce'
+  }
 });
+
+// ─────────────────────────────────────────────────────────
+// 인증 (관리자 구글 OAuth)
+//   supabase 클라이언트는 내부 전용이므로 auth 동작도 이 파일의 래퍼로만 노출한다.
+//   signInWithGoogle은 구글 동의 화면으로 리다이렉트하고, 콜백으로 돌아오면
+//   detectSessionInUrl이 ?code=를 세션으로 교환한다. "관리자인가?" 판정은 서버
+//   RPC(is_current_user_admin)가 JWT 이메일을 allowlist와 대조해 내려준다.
+// ─────────────────────────────────────────────────────────
+export async function signInWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: `${window.location.origin}/#/admin` }
+  });
+  if (error) throw new Error(`구글 로그인을 시작할 수 없습니다: ${error.message}`);
+  return data;
+}
+
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw new Error(`로그아웃 실패: ${error.message}`);
+  return { ok: true };
+}
+
+// 현재 로그인 사용자(없으면 null). 이메일 표시용.
+export async function getCurrentUser() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) return null;
+  return data?.user || null;
+}
+
+// 현재 로그인 사용자가 관리자(allowlist)인지 — 서버 판정.
+export async function amIAdmin() {
+  const { data, error } = await supabase.rpc('is_current_user_admin');
+  if (error) throwTranslated(error);
+  return !!data;
+}
+
+// 로그인/로그아웃 등 인증 상태 변화 구독. 구독 해제 함수를 반환.
+export function onAuthChange(callback) {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    callback?.(event, session);
+  });
+  return () => data?.subscription?.unsubscribe();
+}
 
 // ─────────────────────────────────────────────────────────
 // 읽기

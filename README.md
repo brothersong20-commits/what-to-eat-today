@@ -28,12 +28,11 @@ npm run build
 
 ## 환경 변수
 
-`.env.local` 에 3개 값 필요:
+`.env.local` 에 2개 값 필요:
 
 ```
 VITE_SUPABASE_URL=https://xxxxxxxx.supabase.co
 VITE_SUPABASE_KEY=sb_publishable_...           # 또는 anon JWT
-VITE_ADMIN_KEY=test123                          # private.app_config의 admin_key와 동일
 ```
 
 ## Supabase 셋업
@@ -45,20 +44,25 @@ VITE_ADMIN_KEY=test123                          # private.app_config의 admin_ke
 
 스키마는 멱등 작성이라 변경 후 다시 실행해도 안전합니다.
 
-## 관리자 인증
+## 관리자 인증 (구글 OAuth + 이메일 허용목록)
 
-폴 생성·수정과 식당 관리는 키 검증을 두 군데서 거칩니다.
+`/#/admin` 은 **구글 로그인**으로 들어갑니다. 로그인한 구글 계정의 이메일이 `private.admin_allowlist`
+테이블에 있어야 관리자로 인정되고, 폴/식당/카페 쓰기 RPC도 서버에서 같은 검사(`private.is_admin()`)를 합니다.
 
-1. **클라이언트**: `.env.local`의 `VITE_ADMIN_KEY`와 비교 (입력 차단용)
-2. **서버**: RPC가 `private.app_config.admin_key` 값과 비교 (실제 데이터 보호)
+**1) Supabase 대시보드 설정** (Authentication)
+- Providers → **Google** 활성화 + Google Cloud에서 발급한 Client ID/Secret 입력
+  (구글 OAuth 클라이언트의 승인된 리디렉션 URI = `https://<project-ref>.supabase.co/auth/v1/callback`)
+- URL Configuration → **Redirect URLs**에 개발/운영 주소 추가
+  (로컬은 `http://localhost:5273/**`, 배포 시 `https://<도메인>/**`)
 
-두 값을 동일하게 맞추세요. 변경 시:
+**2) 관리자 추가/삭제** (SQL Editor)
 
 ```sql
-update private.app_config set value = '새 값' where key = 'admin_key';
+insert into private.admin_allowlist (email) values ('someone@gmail.com');
+delete from private.admin_allowlist where email = 'someone@gmail.com';
 ```
 
-키는 클라 번들에 노출되므로 강한 인증이 아닙니다. "URL이 새도 폴은 못 만들게" 정도의 가벼운 차단으로 보면 됩니다.
+관리자 권한은 클라이언트가 아니라 서버에서 로그인 JWT의 이메일로 판정하므로, 번들에 비밀이 들어가지 않습니다.
 
 ## 폴더 구조
 

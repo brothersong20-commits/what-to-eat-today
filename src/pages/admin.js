@@ -12,8 +12,10 @@ import { categoryBadgeHtml, areaBadgeHtml } from '../components/category-badge.j
 import { escapeHtml, safeUrl } from '../lib/escape.js';
 import { onRouteLeave } from '../lib/router.js';
 import { uniq } from '../lib/facets.js';
+import { signInWithGoogle, signOut, getCurrentUser, amIAdmin } from '../lib/supabase.js';
 
-const STORAGE_KEY = 'wte_admin_key';
+// 현재 로그인한 관리자 이메일 — 셸 상단 표시용. bootstrapAuth에서 설정.
+let currentAdminEmail = '';
 
 // 모듈 스코프 cleanup 레지스트리 — 탭 전환·상세 떠나기·해시 변경 시 모두 회수
 const cleanups = new Set();
@@ -44,25 +46,39 @@ export function renderAdmin(app) {
   // 다른 라우트로 이동하면 모든 폴링/타이머/구독 회수 (라우터 중앙 정리 훅)
   onRouteLeave(runAllCleanups);
 
-  if (!getStoredKey()) {
-    renderLogin(root);
-  } else {
-    renderShell(root);
-  }
-}
-
-function getStoredKey() {
-  try { return localStorage.getItem(STORAGE_KEY) || ''; } catch { return ''; }
-}
-function setStoredKey(value) {
-  try { localStorage.setItem(STORAGE_KEY, value); } catch { /* noop */ }
-}
-function clearStoredKey() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+  bootstrapAuth(root);
 }
 
 // ─────────────────────────────────────────────────────────
-// 로그인 게이트
+// 인증 부트스트랩 (구글 OAuth + 허용목록)
+//   세션 없음 → 로그인 화면 / 세션 있고 관리자 → 셸 / 세션 있으나 비관리자 → 권한 없음.
+//   OAuth 콜백(?code=)으로 막 돌아온 경우 detectSessionInUrl이 세션을 교환할 시간을
+//   주기 위해 getCurrentUser가 null이면 한 번 짧게 재시도한다.
+// ─────────────────────────────────────────────────────────
+async function bootstrapAuth(root) {
+  root.innerHTML = `<div class="state"><p>로그인 상태를 확인하는 중...</p></div>`;
+
+  let user = await getCurrentUser();
+  if (!user && /[?&]code=/.test(window.location.search)) {
+    await new Promise((r) => setTimeout(r, 600));
+    user = await getCurrentUser();
+  }
+
+  if (!user) { renderLogin(root); return; }
+
+  let isAdmin = false;
+  try { isAdmin = await amIAdmin(); } catch { isAdmin = false; }
+
+  if (isAdmin) {
+    currentAdminEmail = user.email || '';
+    renderShell(root);
+  } else {
+    renderNotAuthorized(root, user);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// 로그인 게이트 (구글 OAuth)
 // ─────────────────────────────────────────────────────────
 function renderLogin(root) {
   runAllCleanups();
@@ -70,53 +86,43 @@ function renderLogin(root) {
     <section class="card stack-4">
       <div class="stack-3">
         <h2>관리자 인증</h2>
-        <p class="text-soft fs-small">진행중인 회식 투표를 관리하려면 관리자 키가 필요합니다.</p>
+        <p class="text-soft fs-small">진행중인 회식 투표를 관리하려면 구글 계정으로 로그인하세요. 허용된 관리자 계정만 입장할 수 있습니다.</p>
       </div>
-      <div class="stack-3">
-        <label class="field-label" for="admin-key">관리자 키</label>
-        <div class="input-wrap">
-          <input type="password" id="admin-key" class="input" autocomplete="off" placeholder="키를 입력해주세요" />
-          <span class="caps-hint" id="admin-caps-hint" hidden>⇪ Caps Lock 켜짐</span>
-        </div>
-        <p class="field-error" id="admin-key-error" hidden>관리자 키가 올바르지 않습니다.</p>
-      </div>
-      <button class="btn btn-primary btn-block" id="admin-login-btn">확인</button>
+      <button class="btn btn-primary btn-block" id="admin-google-btn">구글로 로그인</button>
     </section>
   `;
 
-  const input = root.querySelector('#admin-key');
-  const errorEl = root.querySelector('#admin-key-error');
-  const capsHint = root.querySelector('#admin-caps-hint');
-  const btn = root.querySelector('#admin-login-btn');
-  input.focus();
-
-  function showError() {
-    input.classList.add('has-error');
-    errorEl.hidden = false;
-  }
-
-  function syncCaps(e) {
-    const on = typeof e.getModifierState === 'function' && e.getModifierState('CapsLock');
-    capsHint.hidden = !on;
-  }
-
-  input.addEventListener('input', () => {
-    input.classList.remove('has-error');
-    errorEl.hidden = true;
+  const btn = root.querySelector('#admin-google-btn');
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = '구글로 이동 중...';
+    try {
+      await signInWithGoogle();
+      // 성공 시 구글 동의 화면으로 리다이렉트되므로 이후 코드는 실행되지 않는다.
+    } catch (err) {
+      showToast(err.message || '로그인을 시작할 수 없습니다', { error: true });
+      btn.disabled = false;
+      btn.textContent = '구글로 로그인';
+    }
   });
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); btn.click(); return; }
-    syncCaps(e);
-  });
-  input.addEventListener('keyup', syncCaps);
-  input.addEventListener('blur', () => { capsHint.hidden = true; });
-  btn.addEventListener('click', () => {
-    const value = input.value.trim();
-    if (!value) { showError(); input.focus(); return; }
-    const expected = import.meta.env.VITE_ADMIN_KEY;
-    if (expected && value !== expected) { showError(); input.focus(); return; }
-    setStoredKey(value);
-    renderShell(root);
+}
+
+// 로그인했지만 허용목록에 없는 계정 — 안내 + 로그아웃.
+function renderNotAuthorized(root, user) {
+  runAllCleanups();
+  const email = user?.email || '알 수 없는 계정';
+  root.innerHTML = `
+    <section class="card stack-4">
+      <div class="stack-3">
+        <h2>관리자 권한이 없습니다</h2>
+        <p class="text-soft fs-small"><strong>${escapeHtml(email)}</strong> 계정은 관리자 허용목록에 없습니다. 다른 계정으로 로그인하거나 관리자에게 등록을 요청하세요.</p>
+      </div>
+      <button class="btn btn-outline btn-block" id="admin-signout-btn">다른 계정으로 로그인</button>
+    </section>
+  `;
+  root.querySelector('#admin-signout-btn').addEventListener('click', async () => {
+    try { await signOut(); } catch { /* noop */ }
+    renderLogin(root);
   });
 }
 
@@ -132,7 +138,10 @@ function renderShell(root, { initialTab = 'active', autoOpenPollId = null } = {}
       <button type="button" class="admin-tab" data-tab="restaurants" role="tab">식당 관리</button>
       <button type="button" class="admin-tab" data-tab="cafes" role="tab">카페 관리</button>
       <button type="button" class="admin-tab" data-tab="options" role="tab">분류 관리</button>
-      <button type="button" class="btn btn-ghost admin-logout" id="admin-logout">로그아웃</button>
+      <div class="admin-tabs-right">
+        ${currentAdminEmail ? `<span class="admin-user" title="로그인 계정"><span class="admin-user-dot" aria-hidden="true"></span>${escapeHtml(currentAdminEmail)}</span>` : ''}
+        <button type="button" class="btn btn-ghost admin-logout" id="admin-logout">로그아웃</button>
+      </div>
     </div>
     <div id="admin-tab-body"></div>
   `;
@@ -154,8 +163,9 @@ function renderShell(root, { initialTab = 'active', autoOpenPollId = null } = {}
     btn.addEventListener('click', () => activate(btn.dataset.tab));
   });
 
-  root.querySelector('#admin-logout').addEventListener('click', () => {
-    clearStoredKey();
+  root.querySelector('#admin-logout').addEventListener('click', async () => {
+    runAllCleanups();
+    try { await signOut(); } catch { /* noop */ }
     renderLogin(root);
   });
 
@@ -382,7 +392,7 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
   mount.querySelector('#detail-delete').addEventListener('click', async () => {
     if (!confirm(`정말 "${poll.title}" 투표를 삭제할까요?\n이 투표에 등록된 모든 표가 함께 삭제되며 되돌릴 수 없습니다.`)) return;
     try {
-      await deletePoll({ adminKey: getStoredKey(), pollId: poll.id });
+      await deletePoll({pollId: poll.id });
       const idx = allPolls.findIndex((p) => p.id === poll.id);
       if (idx >= 0) allPolls.splice(idx, 1);
       showToast('투표가 삭제되었습니다');
@@ -525,7 +535,7 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
     saveBtn.textContent = '저장 중...';
 
     try {
-      await updatePoll({ adminKey: getStoredKey(), pollId: poll.id, patch });
+      await updatePoll({pollId: poll.id, patch });
       showToast('저장되었습니다');
 
       // 폴 다시 로드해서 originalPoll 갱신 + 현황 강제 새로고침
@@ -544,8 +554,8 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
       await refreshStatus();
     } catch (err) {
       if (err.code === 'unauthorized') {
-        clearStoredKey();
-        showToast('관리자 키가 만료되었거나 변경되었습니다. 다시 로그인해주세요', { error: true });
+        signOut().catch(() => {});
+        showToast('로그인이 만료되었거나 권한이 없습니다. 다시 로그인해주세요', { error: true });
         renderLogin(mount.closest('#admin-root') || shellRoot);
         return;
       }
@@ -986,7 +996,6 @@ async function renderForm(mount, shellRoot) {
 
     try {
       const result = await createPoll({
-        adminKey: getStoredKey(),
         title,
         mealType,
         eventDate,
@@ -1008,8 +1017,8 @@ async function renderForm(mount, shellRoot) {
       renderShell(adminRoot, { initialTab: 'active', autoOpenPollId: result.pollId });
     } catch (err) {
       if (err.code === 'unauthorized') {
-        clearStoredKey();
-        showToast('관리자 키가 만료되었거나 변경되었습니다. 다시 로그인해주세요', { error: true });
+        signOut().catch(() => {});
+        showToast('로그인이 만료되었거나 권한이 없습니다. 다시 로그인해주세요', { error: true });
         const adminRoot = mount.closest('#admin-root');
         renderLogin(adminRoot);
         return;
@@ -1178,7 +1187,7 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
     mount.querySelector('#rf-cancel').addEventListener('click', () => rerender());
     mount.querySelector('#rf-toggle-active').addEventListener('click', async () => {
       try {
-        await kind.setActive({ adminKey: getStoredKey(), id: editing.id, active: !editing.active });
+        await kind.setActive({id: editing.id, active: !editing.active });
         showToast(editing.active ? '비활성화되었습니다' : '활성화되었습니다');
         rerender({ editingId: editing.id });
       } catch (err) {
@@ -1188,7 +1197,7 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
     mount.querySelector('#rf-delete').addEventListener('click', async () => {
       if (!confirm(`정말 "${editing.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.${kind.deleteConfirmExtra}`)) return;
       try {
-        await kind.remove({ adminKey: getStoredKey(), id: editing.id });
+        await kind.remove({id: editing.id });
         showToast('삭제되었습니다');
         rerender();
       } catch (err) {
@@ -1338,11 +1347,11 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
     saveBtn.textContent = '저장 중...';
     try {
       if (editing) {
-        await kind.save({ adminKey: getStoredKey(), id: editing.id, patch: fields });
+        await kind.save({id: editing.id, patch: fields });
         showToast('수정되었습니다');
         rerender({ editingId: editing.id });
       } else {
-        await kind.create({ adminKey: getStoredKey(), id, ...fields });
+        await kind.create({id, ...fields });
         showToast(`${kind.noun}이 추가되었습니다`);
         rerender({ editingId: id });
       }
@@ -1395,7 +1404,7 @@ async function renderOptionsTab(mount, shellRoot) {
         return;
       }
       try {
-        await createOption({ adminKey: getStoredKey(), kind, value });
+        await createOption({kind, value });
         showToast('추가되었습니다');
         reload();
       } catch (err) {
@@ -1438,7 +1447,7 @@ async function renderOptionsTab(mount, shellRoot) {
           return;
         }
         try {
-          await updateOption({ adminKey: getStoredKey(), kind, oldValue: value, newValue: next });
+          await updateOption({kind, oldValue: value, newValue: next });
           showToast('변경되었습니다');
           reload();
         } catch (err) {
@@ -1446,7 +1455,7 @@ async function renderOptionsTab(mount, shellRoot) {
         }
       } else if (e.target.closest('.opt-delete')) {
         try {
-          await deleteOption({ adminKey: getStoredKey(), kind, value });
+          await deleteOption({kind, value });
           showToast('삭제되었습니다');
           reload();
         } catch (err) {
@@ -1702,8 +1711,8 @@ function bindMenuImagesPreview(mount) {
 
 function handleAdminError(err, mount, shellRoot) {
   if (err.code === 'unauthorized') {
-    clearStoredKey();
-    showToast('관리자 키가 만료되었거나 변경되었습니다. 다시 로그인해주세요', { error: true });
+    signOut().catch(() => {});
+    showToast('로그인이 만료되었거나 권한이 없습니다. 다시 로그인해주세요', { error: true });
     const adminRoot = mount.closest('#admin-root') || shellRoot;
     renderLogin(adminRoot);
     return;

@@ -82,7 +82,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 - **AI 초안 출처 컬럼 (`source`/`source_note`)**: `restaurants`/`cafes`의 `source`는 `'ai_draft'`(=`add-data` 스킬이 web search로 만든 미검토 초안) / `'manual'`(관리자 입력 또는 검토 완료) / `null`(레거시). CHECK 제약으로 값 강제. **관리자 폼 수동 생성은 `source`를 보내지 않아 `null`로 남고**(=초안 아님으로 취급), 배지/배너는 `source==='ai_draft' && !active`일 때만 뜬다. **초안 졸업은 활성화 시점**: `set_restaurant_active`/`set_cafe_active`가 활성화할 때 `ai_draft`→`manual`로 승격한다(별도 인자 없이 본문에서 처리, 시그니처 불변이라 grant 변경 불필요). `add-data` 스킬은 클라이언트가 아니라 운영자 MCP 작업이라 RPC가 아닌 직접 insert를 쓴다(`active=false`, `source='ai_draft'`).
 
-- **관리자 인증 (이중 검증)**: `/#/admin` 진입 시 클라이언트의 `VITE_ADMIN_KEY`와 비교 후 `localStorage.wte_admin_key`에 저장한다. `create_poll`·`update_poll` RPC는 `p_admin_key` 인자를 받아 `private.app_config` 테이블의 `admin_key` 값과 비교한다. private 스키마는 anon/authenticated에 GRANT가 없어 클라이언트가 직접 SELECT 불가하고, 함수는 `security definer`로 우회해서 읽는다. **두 키는 동일 값으로 맞춰야 한다.** 변경 시 SQL Editor에서 `update private.app_config set value = '새 값' where key = 'admin_key';` 실행 + `.env.local`의 `VITE_ADMIN_KEY` 갱신.
+- **관리자 인증 (구글 OAuth + 이메일 허용목록)**: `/#/admin` 진입 시 `bootstrapAuth`(admin.js)가 Supabase Auth 세션을 확인한다 — 세션 없으면 "구글로 로그인" 버튼(`signInWithGoogle`), 세션 있으면 `is_current_user_admin` RPC로 권한을 물어 통과 시 관리자 셸, 아니면 "권한 없음" 안내. 서버 측은 14개 쓰기 RPC가 본문에서 `private.is_admin()`(=JWT의 `email`이 `private.admin_allowlist`에 있는지, security definer로 검사)을 호출해 막는다. **관리자 추가/삭제는 `insert/delete ... private.admin_allowlist`** (RPC 불필요, 운영자 직접). 클라이언트는 `flowType:'pkce'`로 세션을 유지하며(`supabase.js`), 로그인 토큰이 모든 요청에 자동 첨부된다. **레거시 주의**: 옛 공유 비밀번호(`VITE_ADMIN_KEY`/`localStorage.wte_admin_key`/`private.app_config.admin_key`/`is_admin_or_key`)는 OAuth 전환(Step 6)으로 전부 제거됐다. 단 14개 RPC 시그니처의 **`p_admin_key text` 첫 인자는 호환을 위해 남아있으나 본문에서 미사용**(deprecated) — 클라이언트 래퍼(`supabase.js`)가 아직 `p_admin_key: ''`로 보내지만 무시된다. 시그니처를 건드리면 GRANT·클라이언트를 함께 고쳐야 하니 그대로 둘 것.
 
 - **투표는 (poll_id, voter_name) 기준 upsert**: `submit_vote` RPC가 `on conflict ... do update`로 같은 이름의 기존 행을 덮어쓴다. 응답 boolean으로 신규(`false`)/수정(`true`)을 구분한다.
 
@@ -100,7 +100,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 - **Realtime 구독·타이머 cleanup은 라우터가 일괄 회수**: `subscribeVotes`/`subscribeLikes` 채널과 `setInterval` 등은 페이지에서 `onRouteLeave(fn)`(`src/lib/router.js`)로 등록하면 다음 라우트로 dispatch될 때 자동 정리된다(같은 경로 재진입처럼 hashchange가 안 뜨는 경우까지 커버). 채널은 `unsubscribe(channel)`로 정리. admin.js는 모듈 스코프 레지스트리(`registerCleanup`/`runAllCleanups`)를 쓰되 진입 시 `onRouteLeave(runAllCleanups)`로 연결한다. **새 페이지에서 타이머/구독을 만들면 반드시 `onRouteLeave`로 정리 등록할 것.**
 
-- **`VITE_` 환경변수는 클라이언트 번들에 노출된다**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`(=publishable/anon key), `VITE_ADMIN_KEY` 모두 공개된다. **`service_role` 키는 절대 클라이언트에 두지 말 것** — RLS 우회 가능하다. 관리자 키는 publishable이 아니라 별도 GUC 검증이라 안전성 확보.
+- **`VITE_` 환경변수는 클라이언트 번들에 노출된다**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`(=publishable/anon key)는 공개돼도 되는 값이다. **`service_role` 키는 절대 클라이언트에 두지 말 것** — RLS 우회 가능하다. (구 `VITE_ADMIN_KEY`는 OAuth 전환으로 제거 — 더 이상 쓰지 않는다.) 관리자 권한은 클라이언트 키가 아니라 서버에서 로그인 JWT의 이메일을 `private.admin_allowlist`와 대조해 판정하므로, 번들에 비밀이 들어가지 않는다.
 
 - **디자인 토큰 파이프라인**: `DESIGN.md`(Starbucks 영감 명세) → `src/styles/tokens.css`(CSS 변수) → `src/styles/global.css`(토큰만 참조). 새 색/간격이 필요하면 먼저 `tokens.css`에 토큰을 추가하고 그 변수를 사용해야 한다. 루트가 `62.5%`라는 전제 위에서 `1rem = 10px`로 스페이싱 스케일이 설계돼 있다.
 
@@ -120,7 +120,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 - **스키마 초기 설정**: `supabase/schema.sql` 전체를 Supabase 대시보드 SQL Editor에 붙여넣고 실행. 멱등하게 작성돼 있어 반복 실행 가능.
 - **시드 데이터**: 빈 시작용 더미가 필요하면 `supabase/seed.sql` 실행.
-- **ADMIN_KEY 변경**: `update private.app_config set value = '...' where key = 'admin_key';` 실행 + `.env.local`의 `VITE_ADMIN_KEY` 동기화.
+- **관리자 추가/삭제 (구글 OAuth)**: `insert into private.admin_allowlist (email) values ('someone@gmail.com');` / `delete from private.admin_allowlist where email = '...';`. 해당 이메일의 구글 계정으로 로그인하면 관리자가 된다. (별도 키·`.env` 동기화 불필요.) 구글 provider 활성화·Redirect URLs 설정은 Supabase 대시보드 Authentication에서.
 - **Realtime 동작 확인**: `supabase_realtime` publication에 `public.votes`가 포함돼 있어야 한다. `schema.sql`이 자동 추가하지만, 새 테이블의 변경도 구독하려면 publication에 add 필요.
 
 ## Git 커밋 규칙
