@@ -1146,6 +1146,32 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
     rerender({ editingId: editingId === rid ? null : rid });
   });
 
+  // 썸네일 깨짐 감지 — 로드 실패 행에 '⚠ 사진 깨짐' 표시(즉시) + 깨진 개수 요약 알림(관리자가 URL 갱신하도록).
+  (() => {
+    const thumbs = [...mount.querySelectorAll('.rest-thumb')];
+    if (!thumbs.length) return;
+    const markBroken = (img) => {
+      img.style.display = 'none';
+      const flag = img.closest('.rest-row')?.querySelector('.rest-flag.is-broken');
+      if (flag) flag.hidden = false;
+    };
+    thumbs.forEach((img) => {
+      if (img.complete) {
+        if (!img.naturalWidth) markBroken(img);
+      } else {
+        img.addEventListener('error', () => markBroken(img), { once: true });
+      }
+    });
+    // 로드가 정착할 시간을 준 뒤 깨진 개수를 한 번 집계해 알림(lazy 로딩·캐시 모두 커버).
+    setTimeout(() => {
+      if (!mount.isConnected) return;
+      const broken = [...mount.querySelectorAll('.rest-thumb')].filter((i) => i.complete && !i.naturalWidth).length;
+      if (broken > 0) {
+        showToast(`썸네일 ${broken}곳을 불러오지 못했습니다 — 목록의 '⚠ 사진 깨짐' 항목 이미지 URL을 갱신해주세요`, { error: true });
+      }
+    }, 3500);
+  })();
+
   if (editing) {
     // 행 클릭/저장 후 편집 폼이 보이도록 스크롤(목록이 길 때 폼을 찾아 내려가는 마찰 제거).
     requestAnimationFrame(() => mount.querySelector('#rest-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -1477,7 +1503,7 @@ function optionRowHtml(kind, value) {
 function restaurantRowHtml(r, isEditing) {
   return `
     <div class="rest-row ${isEditing ? 'is-editing' : ''} ${r.active ? '' : 'is-inactive'}" data-restaurant-id="${escapeHtml(r.id)}">
-      ${r.imageUrl ? `<img class="rest-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />` : ''}
+      ${r.imageUrl ? `<img class="rest-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ''}
       <span class="rest-id">${escapeHtml(r.id)}</span>
       ${categoryBadgeHtml(r.category)}
       ${areaBadgeHtml(r.area)}
@@ -1485,6 +1511,7 @@ function restaurantRowHtml(r, isEditing) {
       <span class="rest-name">${escapeHtml(r.name)}</span>
       ${safeUrl(r.naverUrl) ? `<a class="rest-naver" href="${escapeHtml(safeUrl(r.naverUrl))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
       ${r.source === 'ai_draft' && !r.active ? `<span class="rest-flag is-draft" title="AI가 web search로 만든 초안 — 검토 후 활성화하세요">AI 초안 · 검토 필요</span>` : ''}
+      ${r.imageUrl ? `<span class="rest-flag is-broken" title="썸네일 이미지를 불러올 수 없습니다 — 이미지 URL을 갱신하세요" hidden>⚠ 사진 깨짐</span>` : ''}
       <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>
     </div>
   `;

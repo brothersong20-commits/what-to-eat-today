@@ -2318,6 +2318,11 @@ textarea {
   background: var(--badge-warn-bg);
   color: var(--badge-warn-fg);
 }
+/* 사진 깨짐 배지 — 썸네일 로드 실패 시 노출(관리자 목록) */
+.rest-flag.is-broken {
+  background: var(--badge-danger-bg);
+  color: var(--badge-danger-fg);
+}
 /* AI 초안 폼 배너 — 검토 안내 + 출처 */
 .rf-draft-banner {
   background: var(--badge-warn-bg);
