@@ -58,6 +58,8 @@ alter table public.restaurants add column if not exists source_note text;
 alter table public.restaurants drop constraint if exists restaurants_source_check;
 alter table public.restaurants add constraint restaurants_source_check
   check (source is null or source in ('ai_draft','manual'));
+-- 이미지 출처(저작권 표기): image_url 사진의 출처 URL(블로그/네이버 등). 손님 카드에 '사진 출처' 링크로 노출.
+alter table public.restaurants add column if not exists image_source text;
 
 -- 카페 — restaurants와 동일 구조에서 회식 수용인원(capacity_*)만 제외.
 -- 점심 식사 후 둘러볼 카페 목록. 투표 후보가 아니라 단순 조회용.
@@ -86,6 +88,7 @@ alter table public.cafes add column if not exists source_note text;
 alter table public.cafes drop constraint if exists cafes_source_check;
 alter table public.cafes add constraint cafes_source_check
   check (source is null or source in ('ai_draft','manual'));
+alter table public.cafes add column if not exists image_source text;
 
 create table if not exists public.polls (
   id                     text primary key,

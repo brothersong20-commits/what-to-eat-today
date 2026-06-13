@@ -38,6 +38,12 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
     ? `<img class="rc-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />`
     : '';
 
+  // 사진 출처(저작권 표기) — 썸네일이 있고 출처 URL이 유효할 때만 작은 링크로.
+  const safeImgSrc = r.imageUrl ? safeUrl(r.imageSource) : '';
+  const imgCredit = safeImgSrc
+    ? `<a class="rc-img-credit" href="${escapeHtml(safeImgSrc)}" target="_blank" rel="noopener nofollow" onclick="event.stopPropagation()" aria-label="사진 출처 (새 창)">사진 출처 ↗</a>`
+    : '';
+
   const noteRow = r.note
     ? `<p class="rc-note">📝 ${escapeHtml(r.note)}</p>`
     : '';
@@ -98,6 +104,7 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
     <article class="restaurant-card" data-id="${escapeHtml(r.id)}">
       ${likeBtn}
       ${thumb}
+      ${imgCredit}
       <header class="rc-header">
         <h3 class="rc-name">${escapeHtml(r.name)}${r.isGroupDining ? verifiedSealHtml() : ''}</h3>
         <div class="rc-meta-row">${meta}</div>

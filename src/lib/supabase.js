@@ -45,7 +45,8 @@ function mapRestaurant(r) {
     menuImageUrls: Array.isArray(r.menu_image_urls) ? r.menu_image_urls : [],
     closedDays: Array.isArray(r.closed_days) ? r.closed_days : [],
     source: r.source || null,
-    sourceNote: r.source_note || ''
+    sourceNote: r.source_note || '',
+    imageSource: r.image_source || ''
   };
 }
 
@@ -75,7 +76,8 @@ function mapCafe(c) {
     menuImageUrls: Array.isArray(c.menu_image_urls) ? c.menu_image_urls : [],
     closedDays: Array.isArray(c.closed_days) ? c.closed_days : [],
     source: c.source || null,
-    sourceNote: c.source_note || ''
+    sourceNote: c.source_note || '',
+    imageSource: c.image_source || ''
   };
 }
 

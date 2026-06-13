@@ -117,4 +117,5 @@ project_id를 재확인한다. 같은 이름이 이미 있으면(동명/재등�
 - `scripts/build_insert_sql.py` — 구조화 JSON → 안전한 단일 INSERT(이스케이프·menus_text·배열 처리).
 - `scripts/upload_image.py` — 로컬 이미지 파일 → Supabase Storage(`images` 버킷) 업로드, public URL 반환(kind 검증·매직바이트·2MB 가드). 이미지 백필용.
 - `scripts/audit_naver.py` — 기존 DB(식당·카페)를 네이버 지역검색으로 점검(존재·카테고리·주소, **보고서 전용·DB 미수정**).
-- `references/fields.md` — 컬럼/JSON 필드 의미, 비워두는 규칙, area·이미지 처리, 예시.
+- `scripts/naver_photos.mjs` — 네이버 플레이스 '사진' 탭에서 실제 지점 사진 URL 수집(Playwright 헤드리스). 수집→`upload_image.py` 호스팅→`image_url`+`image_source` 저장. 일괄 대량은 ToS 유의.
+- `references/fields.md` — 컬럼/JSON 필드 의미, 비워두는 규칙, area·이미지·**이미지 출처 정책**, 예시.
