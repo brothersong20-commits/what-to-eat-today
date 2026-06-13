@@ -1288,8 +1288,27 @@ textarea {
   cursor: pointer;
   transition: all var(--duration) var(--ease);
 }
-.rc-choice input {
-  display: none;
+/* 라디오는 시각적으로만 숨기고 키보드 포커스·탭 순서는 유지(접근성).
+   display:none 이면 키보드/스크린리더 사용자가 투표를 못 한다.
+   선택 표시는 .is-picked* / .is-picked 클래스(JS 토글)가 담당. */
+.rc-choice input,
+.attendance-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* 키보드로 이동했을 때만 포커스 링 표시(마우스 클릭 시엔 안 뜸). */
+.rc-choice:has(input:focus-visible),
+.attendance-option:has(input:focus-visible) {
+  outline: 2px solid var(--green-accent);
+  outline-offset: 2px;
 }
 .rc-choice:hover {
   border-color: var(--green-accent);
@@ -1579,9 +1598,7 @@ textarea {
   cursor: pointer;
   transition: all var(--duration) var(--ease);
 }
-.attendance-option input {
-  display: none;
-}
+/* .attendance-option input 의 시각적 숨김·포커스 링은 위 .rc-choice 와 공용 규칙으로 처리. */
 .attendance-option:hover {
   border-color: var(--green-accent);
 }

@@ -8,7 +8,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   throw new Error('환경변수 누락: VITE_SUPABASE_URL 또는 VITE_SUPABASE_KEY');
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+// 모듈 내부 전용 클라이언트. 외부는 이 파일의 load*/RPC 래퍼 함수만 사용한다(직접 import 금지).
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false }
 });
 
@@ -547,6 +548,9 @@ function translateError(code) {
     case 'poll_not_found':          return '존재하지 않는 투표입니다.';
     case 'poll_closed':             return '이미 마감된 투표입니다.';
     case 'deadline_passed':         return '투표 마감 시각이 지났습니다.';
+    case 'voter_name_too_long':     return '이름이 너무 깁니다. (최대 40자)';
+    case 'invalid_choice':          return '후보에 없는 식당을 선택했습니다.';
+    case 'duplicate_choice':        return '1순위와 2순위는 서로 다른 식당이어야 합니다.';
     case 'unauthorized':            return '관리자 키가 올바르지 않습니다.';
     case 'invalid_deadline':        return '마감 시각이 올바르지 않습니다.';
     case 'invalid_status':          return '투표 상태 값이 올바르지 않습니다.';

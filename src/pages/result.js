@@ -2,7 +2,7 @@ import { loadPoll, loadRestaurants, loadVotes, subscribeVotes, unsubscribe } fro
 import { tally } from '../lib/tally.js';
 import { isPastDeadline, formatRemaining, formatEventDateTime } from '../lib/time.js';
 import { ATTENDANCE } from '../lib/config.js';
-import { navigate } from '../lib/router.js';
+import { navigate, onRouteLeave } from '../lib/router.js';
 import { hasVoted } from '../lib/voter.js';
 import { escapeHtml } from '../lib/escape.js';
 
@@ -161,7 +161,7 @@ export async function renderResult(app, { id: pollId }) {
       };
       tick();
       const handle = setInterval(tick, 1000);
-      window.addEventListener('hashchange', () => clearInterval(handle), { once: true });
+      onRouteLeave(() => clearInterval(handle));
       return;
     }
 
@@ -186,7 +186,7 @@ export async function renderResult(app, { id: pollId }) {
       if (channel) { unsubscribe(channel); channel = null; }
       if (pollTick) { clearInterval(pollTick); pollTick = null; }
     }
-    window.addEventListener('hashchange', dispose, { once: true });
+    onRouteLeave(dispose);
 
     // 표가 바뀔 때마다 #tally-body 만 다시 그린다. reloading 가드로 동시 투표 버스트를
     // 합치고, 처리 후 도착하는 다음 이벤트로 최종 상태에 수렴한다.

@@ -1,12 +1,29 @@
 node_modules
 dist
+# 환경변수 — 모든 .env 변종을 막고 템플릿(.env.example)만 추적.
+# (.env.production 등에 실수로 키를 넣어도 커밋되지 않게)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 .DS_Store
 *.log
 .vercel
 .vscode
 .claude
 
-.vercel
+# AI 코드리뷰 작업물(계획서·보고서) — 저장소에 커밋하지 않음
+docs/review/
+
+# 비밀키·인증서 — 실수로 커밋되지 않게 방어선
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa
+secrets.json
+.env.bak
+
+# Supabase CLI 로컬 산출물(향후 CLI 도입 대비)
+supabase/.temp/
+supabase/.branches/

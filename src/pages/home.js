@@ -16,6 +16,7 @@ import { uniq } from '../lib/facets.js';
 import { getClientId } from '../lib/client-id.js';
 import { showToast } from '../lib/toast.js';
 import { openModal } from '../lib/modal.js';
+import { onRouteLeave } from '../lib/router.js';
 
 export async function renderHome(app) {
   app.innerHTML = `
@@ -160,10 +161,10 @@ export async function renderHome(app) {
     .catch(() => { /* 실패 시 0으로 시작, 토글·Realtime으로 채워짐 */ });
 
   const likesChannel = subscribeLikes(scheduleLikesRefresh);
-  window.addEventListener('hashchange', () => {
+  onRouteLeave(() => {
     if (likesRefreshHandle) clearTimeout(likesRefreshHandle);
     unsubscribe(likesChannel);
-  }, { once: true });
+  });
 
   loadPolls()
     .then(async (polls) => {
@@ -218,7 +219,7 @@ export async function renderHome(app) {
       }
       tickPollCountdowns();
       const handle = setInterval(tickPollCountdowns, 1000);
-      window.addEventListener('hashchange', () => clearInterval(handle), { once: true });
+      onRouteLeave(() => clearInterval(handle));
     })
     .catch(() => {
       /* 활성 폴 로드 실패는 silent. 식당 목록은 별도로 진행. */

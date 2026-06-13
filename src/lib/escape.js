@@ -4,3 +4,10 @@ export function escapeHtml(s) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 }
+
+// href/src 용 URL 스킴 화이트리스트. http/https 만 통과시키고 javascript: 같은
+// 위험 스킴은 빈 문자열로 차단(저장형 XSS 방지). 반환값도 속성에 넣을 땐 escapeHtml 로 감쌀 것.
+export function safeUrl(url) {
+  const s = String(url ?? '').trim();
+  return /^https?:\/\//i.test(s) ? s : '';
+}

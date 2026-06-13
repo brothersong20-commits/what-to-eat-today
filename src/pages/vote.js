@@ -5,7 +5,7 @@ import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { flipClockHtml, updateFlipClock } from '../components/flip-clock.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { showToast } from '../lib/toast.js';
-import { navigate } from '../lib/router.js';
+import { navigate, onRouteLeave } from '../lib/router.js';
 import { hasVoted, getVotedRecord, markVoted } from '../lib/voter.js';
 import { shareControlsHtml, bindShareControls } from '../components/share.js';
 import { spinWheelButtonHtml, bindSpinWheel } from '../components/spin-wheel.js';
@@ -184,16 +184,30 @@ export async function renderVote(app, { id: pollId }) {
   // ─── countdown ─────────────────────────────────────────
   const countdownEl = root.querySelector('#countdown');
   const clockEl = countdownEl.querySelector('[data-deadline-clock]');
+  let deadlineHandled = false;
+  function handleDeadlinePassed() {
+    if (deadlineHandled) return;
+    deadlineHandled = true;
+    // 작성 도중 마감되면 막다른 길이 되지 않도록 제출 버튼을 '결과 보기'로 전환한다.
+    const btn = root.querySelector('#submit-btn');
+    if (btn) {
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-outline');
+      btn.textContent = '마감됐어요 — 결과 보기';
+    }
+    showToast('투표가 마감됐어요. 결과를 확인해보세요.', { error: true });
+  }
   function tickCountdown() {
     const parts = clockParts(poll.deadline);
     updateFlipClock(clockEl, parts);
+    if (parts.expired) handleDeadlinePassed();
     return !parts.expired;
   }
   tickCountdown();
   const tickHandle = setInterval(() => {
     if (!tickCountdown()) clearInterval(tickHandle);
   }, 1000);
-  window.addEventListener('hashchange', () => clearInterval(tickHandle), { once: true });
+  onRouteLeave(() => clearInterval(tickHandle));
 
   // ─── name ─────────────────────────────────────────────
   const nameInput = root.querySelector('#voter-name');
@@ -253,6 +267,20 @@ export async function renderVote(app, { id: pollId }) {
       .join('');
   }
 
+  // 선택만 바뀐 경우엔 목록 전체를 다시 그리지 않고 1·2순위 표시(클래스·checked)만 갱신한다.
+  // 전체 재렌더는 펼쳐둔 메뉴(details)를 접고 키보드 포커스를 날려버리기 때문.
+  function updateChoiceMarks() {
+    listEl.querySelectorAll('.rc-choice').forEach((label) => {
+      const input = label.querySelector('input');
+      if (!input) return;
+      const isPick1 = input.name === 'choice1' && state.choice1Id === input.value;
+      const isPick2 = input.name === 'choice2' && state.choice2Id === input.value;
+      label.classList.toggle('is-picked-1', isPick1);
+      label.classList.toggle('is-picked-2', isPick2);
+      input.checked = isPick1 || isPick2;
+    });
+  }
+
   function renderChoiceSummary() {
     const find = (id) => restaurants.find((r) => r.id === id);
     const first = find(state.choice1Id);
@@ -285,7 +313,7 @@ export async function renderVote(app, { id: pollId }) {
       }
       state.choice2Id = id;
     }
-    renderList();
+    updateChoiceMarks();
     renderChoiceSummary();
   });
 
@@ -306,7 +334,7 @@ export async function renderVote(app, { id: pollId }) {
         state.choice1Id = restaurantId;
         if (state.choice2Id === restaurantId) state.choice2Id = '';
       }
-      renderList();
+      updateChoiceMarks();
       renderChoiceSummary();
       const picked = restaurants.find((r) => r.id === restaurantId);
       showToast(`${picked ? picked.name : '식당'} 을(를) ${rank}순위로 넣었어요`);
@@ -318,6 +346,12 @@ export async function renderVote(app, { id: pollId }) {
   const submitBtn = root.querySelector('#submit-btn');
   submitBtn.addEventListener('click', async () => {
     if (state.submitting) return;
+
+    // 작성 중 마감된 경우: 제출 대신 결과 화면으로 보낸다(서버도 거부하지만 UX를 매끄럽게).
+    if (isPastDeadline(poll.deadline)) {
+      navigate(`/result/${poll.id}`);
+      return;
+    }
 
     if (!state.voterName) {
       nameInput.classList.add('has-error');
@@ -339,6 +373,8 @@ export async function renderVote(app, { id: pollId }) {
     submitBtn.textContent = '제출 중...';
 
     try {
+      // 이 브라우저의 직전 투표 기록 — 덮어쓰기가 '본인 수정'인지 '남의 표 덮어씀'인지 구분용.
+      const priorRecord = getVotedRecord(poll.id);
       const result = await submitVote({
         pollId: poll.id,
         voterName: state.voterName,
@@ -346,8 +382,9 @@ export async function renderVote(app, { id: pollId }) {
         choice1Id: state.choice1Id,
         choice2Id: state.choice2Id
       });
+      const overwroteOther = result.updated && (!priorRecord || priorRecord.name !== state.voterName);
       markVoted(poll.id, { name: state.voterName, attendance: state.attendance });
-      renderSuccess(root, poll, result, state);
+      renderSuccess(root, poll, result, state, overwroteOther);
     } catch (err) {
       showToast(err.message || '제출에 실패했습니다', { error: true });
       submitBtn.disabled = false;
@@ -358,14 +395,19 @@ export async function renderVote(app, { id: pollId }) {
   }
 }
 
-function renderSuccess(root, poll, result, state) {
-  const updatedNote = result.updated ? '기존 투표를 수정했어요.' : '투표가 제출되었어요.';
+function renderSuccess(root, poll, result, state, overwroteOther = false) {
+  const updatedNote = overwroteOther
+    ? '같은 이름의 기존 투표를 덮어썼어요.'
+    : result.updated
+      ? '기존 투표를 수정했어요.'
+      : '투표가 제출되었어요.';
   root.innerHTML = `
     <section class="card stack-4" style="text-align: center;">
-      <div style="font-size: 4.8rem;">🎉</div>
+      <div style="font-size: 4.8rem;">${overwroteOther ? '⚠️' : '🎉'}</div>
       <h2>${escapeHtml(updatedNote)}</h2>
       <p class="text-soft">${escapeHtml(poll.title)}</p>
       <p class="text-soft fs-small">이름: ${escapeHtml(state.voterName)} / ${escapeHtml(state.attendance)}</p>
+      ${overwroteOther ? `<p class="field-error" style="position: static;">본인이 아니라면 이름을 바꿔 다시 투표해주세요.</p>` : ''}
       <div class="row-2" style="justify-content: center; flex-wrap: wrap;">
         <button class="btn btn-primary" id="see-result">현재 투표 현황 보기</button>
         <button class="btn btn-outline" id="redo">다시 투표</button>

@@ -1,5 +1,5 @@
 import { formatPrice, compareMenu } from '../lib/menus.js';
-import { escapeHtml } from '../lib/escape.js';
+import { escapeHtml, safeUrl } from '../lib/escape.js';
 import { verifiedSealHtml } from './verified-seal.js';
 import { heartSvg } from './heart-icon.js';
 import { categoryBadgeHtml, areaBadgeHtml } from './category-badge.js';
@@ -55,12 +55,13 @@ export function restaurantCardHtml(r, { mode = 'view', pollId, choice1Id, choice
       }</p>`
     : '';
 
-  const mapLink = r.naverUrl
-    ? `<a href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" class="rc-map-link" aria-label="네이버 지도에서 보기">↗</a>`
+  const safeNaver = safeUrl(r.naverUrl);
+  const mapLink = safeNaver
+    ? `<a href="${escapeHtml(safeNaver)}" target="_blank" rel="noopener" class="rc-map-link" aria-label="네이버 지도에서 보기">↗</a>`
     : '';
 
   const addressRow =
-    r.address || r.naverUrl
+    r.address || safeNaver
       ? `<p class="rc-address">📍 <span class="rc-address-text">${escapeHtml(r.address)}</span>${mapLink}</p>`
       : '';
 

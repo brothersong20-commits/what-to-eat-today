@@ -18,8 +18,11 @@ create table if not exists private.app_config (
   value text not null
 );
 
+-- 최초 설치 시에만 기본 admin_key를 심는다. 재실행해도 기존 값을 덮어쓰지 않도록
+-- do nothing (do update 였다면 schema.sql 재실행마다 운영 키가 'test123'으로 초기화됨).
+-- 키 변경은 운영 절차대로: update private.app_config set value = '...' where key = 'admin_key';
 insert into private.app_config (key, value) values ('admin_key', 'test123')
-on conflict (key) do update set value = excluded.value;
+on conflict (key) do nothing;
 
 -- ─────────────────────────────────────────────────────────
 -- 1. 테이블
@@ -125,9 +128,10 @@ security definer
 set search_path = public
 as $$
 declare
-  v_status   text;
-  v_deadline timestamptz;
-  v_existed  boolean;
+  v_status     text;
+  v_deadline   timestamptz;
+  v_existed    boolean;
+  v_candidates text[];
 begin
   if p_poll_id is null or btrim(p_poll_id) = ''
      or p_voter_name is null or btrim(p_voter_name) = ''
@@ -137,8 +141,12 @@ begin
   if p_attendance not in ('참석', '불참석', '보류') then
     raise exception 'invalid_attendance';
   end if;
+  -- 이름 길이 제한(클라이언트 maxlength=40과 동일). 우회 호출로 거대한 이름 저장 방지.
+  if char_length(btrim(p_voter_name)) > 40 then
+    raise exception 'voter_name_too_long';
+  end if;
 
-  select status, deadline into v_status, v_deadline
+  select status, deadline, restaurant_ids into v_status, v_deadline, v_candidates
     from public.polls where id = p_poll_id;
   if not found then
     raise exception 'poll_not_found';
@@ -148,6 +156,20 @@ begin
   end if;
   if now() > v_deadline then
     raise exception 'deadline_passed';
+  end if;
+
+  -- 참석일 때만 선택 검증(불참/보류는 선택값을 저장하지 않음).
+  -- 클라이언트 우회 호출로 후보에 없는 식당이나 1=2순위 중복 점수를 넣는 것을 차단.
+  if p_attendance = '참석' then
+    if p_choice_1_id is not null and not (p_choice_1_id = any(v_candidates)) then
+      raise exception 'invalid_choice';
+    end if;
+    if p_choice_2_id is not null and not (p_choice_2_id = any(v_candidates)) then
+      raise exception 'invalid_choice';
+    end if;
+    if p_choice_1_id is not null and p_choice_1_id = p_choice_2_id then
+      raise exception 'duplicate_choice';
+    end if;
   end if;
 
   select exists (
@@ -846,13 +868,13 @@ grant execute on function public.submit_vote(text, text, text, text, text)      
 grant execute on function public.toggle_like(text, text, text)                                 to anon, authenticated;
 grant execute on function public.create_poll(text, text, text, date, time, timestamptz, text, text[])          to anon, authenticated;
 grant execute on function public.update_poll(text, text, text, text, date, time, timestamptz, text, boolean, text, text[]) to anon, authenticated;
-grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean, text[])     to anon, authenticated;
-grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean, boolean, boolean, boolean, boolean, text[]) to anon, authenticated;
+grant execute on function public.create_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean, text[], text[])     to anon, authenticated;
+grant execute on function public.update_restaurant(text, text, text, text, text, text, text, text, int, int, int, text, text, text, boolean, boolean, boolean, boolean, boolean, boolean, text[], text[]) to anon, authenticated;
 grant execute on function public.delete_restaurant(text, text)                                 to anon, authenticated;
 grant execute on function public.delete_poll(text, text)                                       to anon, authenticated;
 grant execute on function public.set_restaurant_active(text, text, boolean)                    to anon, authenticated;
-grant execute on function public.create_cafe(text, text, text, text, text, text, text, text, int, text, text, text, boolean, text[])             to anon, authenticated;
-grant execute on function public.update_cafe(text, text, text, text, text, text, text, text, int, text, text, text, boolean, boolean, boolean, text[]) to anon, authenticated;
+grant execute on function public.create_cafe(text, text, text, text, text, text, text, text, int, text, text, text, boolean, text[], text[])             to anon, authenticated;
+grant execute on function public.update_cafe(text, text, text, text, text, text, text, text, int, text, text, text, boolean, boolean, boolean, text[], text[]) to anon, authenticated;
 grant execute on function public.delete_cafe(text, text)                                       to anon, authenticated;
 grant execute on function public.set_cafe_active(text, text, boolean)                          to anon, authenticated;
 

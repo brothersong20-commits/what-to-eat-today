@@ -49,17 +49,17 @@ npm run preview  # 빌드 결과 로컬 미리보기
 |---|---|---|
 | `tally.js` | `tally(votes, restaurants)` | 1·2순위 가중치 랭킹 |
 | `time.js` | `isPastDeadline` `clockParts` `withinDeadlineDay` `formatEventDateTime` `formatRemaining` `deadlineUrgency` `isDeadlineAfterEvent` | 마감/이벤트 시간 계산·표시 |
-| `config.js` | `CATEGORIES` `categorySlug()` `ATTENDANCE` | 카테고리 slug·참석 enum |
+| `config.js` | `CATEGORIES` `CAFE_CATEGORIES` `AREAS` `CATEGORY_SLUGS` `categorySlug()` `ATTENDANCE` | 카테고리/지역/카페 카테고리 안내값·slug·참석 enum |
 | `menus.js` | `parseMenusText` `serializeMenus` `compareMenu` `formatPrice` | 메뉴 텍스트 파싱·가격 포맷 |
 | `shuffle.js` | `shuffle(arr)` | 무작위 정렬 |
-| `escape.js` | `escapeHtml(s)` | innerHTML 직전 이스케이프 |
+| `escape.js` | `escapeHtml(s)` `safeUrl(url)` | innerHTML 직전 이스케이프 · href/src 스킴 화이트리스트(http/https만) |
 | `facets.js` | `uniq(items, key)` | 필터용 고유값 추출 |
 | `client-id.js` | `getClientId()` | 좋아요용 익명 브라우저 id |
 | `voter.js` | `markVoted` `getVotedRecord` `hasVoted` | 투표 완료 브라우저 게이트 |
 | `toast.js` | `showToast(msg, opts)` | 토스트 피드백 |
-| `router.js` | `defineRoute` `start` `navigate` `currentPath` | 해시 라우터 |
+| `router.js` | `defineRoute` `start` `navigate` `currentPath` `onRouteLeave(fn)` | 해시 라우터 · 페이지 정리(cleanup) 등록 |
 | `modal.js` | `openModal(opts)` | 오버레이 모달 수명주기·접근성 |
-| `supabase.js` | `loadRestaurants/Cafes/Polls/Votes/Likes` · `submitVote` · `create/update* RPC` · `subscribe*`/`unsubscribe` | 데이터 레이어 단일 진입점 |
+| `supabase.js` | `loadRestaurants/Cafes/Polls/Poll/Votes/Likes/Options` · `submitVote` `toggleLike` · `create/update/delete*` RPC(poll·restaurant·cafe·option) · `setRestaurant/CafeActive` · `subscribeVotes/Likes`/`unsubscribe` | 데이터 레이어 단일 진입점. `supabase` 클라이언트는 내부 전용(export 안 함) |
 
 ### src/components (HTML 헬퍼/위젯)
 
@@ -67,9 +67,9 @@ npm run preview  # 빌드 결과 로컬 미리보기
 |---|---|---|
 | `restaurant-card.js` | `restaurantCardHtml(r, opts)` | 식당/카페 카드 |
 | `category-badge.js` | `categoryBadgeHtml(cat)` `areaBadgeHtml(area)` | rc-badge pill |
-| `verified-seal.js` | `verifiedSealHtml()` | 단체회식 인증 씰 |
+| `verified-seal.js` | `verifiedSealHtml({size,title,decorative})` | 단체회식 인증 씰 |
 | `heart-icon.js` | `heartSvg()` | 좋아요 하트 SVG |
-| `flip-clock.js` | `flipClockHtml()` `updateFlipClock()` | 플립 카운트다운 |
+| `flip-clock.js` | `flipClockHtml({parts,size,label})` `updateFlipClock()` | 플립 카운트다운 |
 | `filter-bar.js` | `filterBarHtml()` `bindFilterBar()` `applyFilter()` | 카테고리/지역/검색 필터 |
 | `share.js` | `buildShareUrl` `shareControlsHtml` `bindShareControls` `openQrModal` | 링크 복사·QR |
 | `spin-wheel.js` | `spinWheelButtonHtml()` `bindSpinWheel()` | 식당 돌림판 |
@@ -84,7 +84,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 - **투표는 (poll_id, voter_name) 기준 upsert**: `submit_vote` RPC가 `on conflict ... do update`로 같은 이름의 기존 행을 덮어쓴다. 응답 boolean으로 신규(`false`)/수정(`true`)을 구분한다.
 
-- **마감 검증은 서버에서도 한다**: 클라이언트가 `isPastDeadline()`로 한 번 가드하지만, `submit_vote` RPC가 `polls.deadline`과 `polls.status`를 다시 검증해 `poll_closed`/`deadline_passed` 예외를 raise. 클라이언트 시계를 신뢰하지 말 것.
+- **마감·선택 검증은 서버에서도 한다**: 클라이언트가 `isPastDeadline()`로 한 번 가드하지만, `submit_vote` RPC가 `polls.deadline`과 `polls.status`를 다시 검증해 `poll_closed`/`deadline_passed` 예외를 raise. 추가로 참석 시 `choice_1/2`가 폴 후보(`restaurant_ids`)에 속하는지·서로 다른지(`invalid_choice`/`duplicate_choice`)와 `voter_name` 길이(`voter_name_too_long`)도 서버에서 검증한다. 클라이언트 시계·입력을 신뢰하지 말 것.
 
 - **부분 업데이트 컨벤션**: `update_poll`은 null인 필드를 "변경 안 함"으로 해석한다. `description`을 빈 값으로 명시 클리어하려면 별도 boolean `p_clear_description=true`로 보낸다. 클라이언트 `updatePoll({patch})`이 이 변환을 담당.
 
@@ -96,7 +96,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 - **메뉴 텍스트 포맷**: `restaurants.menus_text`는 `"이름(가격)/이름(가격)"` 슬래시 구분 문자열이다. `src/lib/menus.js`의 `parseMenusText`가 파싱하며 가격 없는 항목(`price = null`)도 허용한다.
 
-- **Realtime 구독은 cleanup 필수**: `subscribeVotes`가 반환한 채널을 페이지 떠날 때 `unsubscribe(channel)`로 정리해야 한다. admin.js는 모듈 스코프 cleanup 레지스트리(`registerCleanup`)로 통일 처리.
+- **Realtime 구독·타이머 cleanup은 라우터가 일괄 회수**: `subscribeVotes`/`subscribeLikes` 채널과 `setInterval` 등은 페이지에서 `onRouteLeave(fn)`(`src/lib/router.js`)로 등록하면 다음 라우트로 dispatch될 때 자동 정리된다(같은 경로 재진입처럼 hashchange가 안 뜨는 경우까지 커버). 채널은 `unsubscribe(channel)`로 정리. admin.js는 모듈 스코프 레지스트리(`registerCleanup`/`runAllCleanups`)를 쓰되 진입 시 `onRouteLeave(runAllCleanups)`로 연결한다. **새 페이지에서 타이머/구독을 만들면 반드시 `onRouteLeave`로 정리 등록할 것.**
 
 - **`VITE_` 환경변수는 클라이언트 번들에 노출된다**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`(=publishable/anon key), `VITE_ADMIN_KEY` 모두 공개된다. **`service_role` 키는 절대 클라이언트에 두지 말 것** — RLS 우회 가능하다. 관리자 키는 publishable이 아니라 별도 GUC 검증이라 안전성 확보.
 

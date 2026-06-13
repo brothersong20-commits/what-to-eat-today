@@ -103,20 +103,6 @@ export function deadlineUrgency(deadlineText, now = new Date()) {
 }
 
 /**
- * 디지털 시계 스타일: "4일 22:35:12" 또는 "05:30:12". 음수면 "마감됨".
- */
-export function formatClock(deadlineText, now = new Date()) {
-  const d = parseDeadline(deadlineText);
-  if (!d) return '';
-  const p = clockParts(deadlineText, now);
-  if (p.expired) return '마감됨';
-
-  const pad = (n) => String(n).padStart(2, '0');
-  const clock = `${pad(p.h)}:${pad(p.m)}:${pad(p.s)}`;
-  return p.days > 0 ? `${p.days}일 ${clock}` : clock;
-}
-
-/**
  * 마감 시각이 지났지만 '마감 날짜' 당일 자정(다음날 00:00) 이전이면 true.
  * 마감 전이면 false (이 함수의 관심사 아님 — 호출부에서 isPastDeadline로 먼저 가드).
  */
@@ -147,18 +133,4 @@ export function formatEventDateTime(dateText, timeText) {
   const wd = weekdayKo(datePart);
   const dateStr = wd ? `${datePart} (${wd})` : datePart;
   return timePart ? `${dateStr} ${timePart}` : dateStr;
-}
-
-/**
- * 마감 절대 일시를 우측 패널용으로 분해. 파싱 실패면 null.
- * { date: "M/D (요일)", time: "HH:mm" }
- */
-export function formatDeadlineParts(deadlineText) {
-  const d = parseDeadline(deadlineText);
-  if (!d) return null;
-  const pad = (n) => String(n).padStart(2, '0');
-  return {
-    date: `${d.getMonth() + 1}/${d.getDate()} (${WEEKDAYS[d.getDay()]})`,
-    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  };
 }

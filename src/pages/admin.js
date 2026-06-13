@@ -9,7 +9,8 @@ import { ATTENDANCE } from '../lib/config.js';
 import { buildShareUrl, openQrModal } from '../components/share.js';
 import { verifiedSealHtml } from '../components/verified-seal.js';
 import { categoryBadgeHtml, areaBadgeHtml } from '../components/category-badge.js';
-import { escapeHtml } from '../lib/escape.js';
+import { escapeHtml, safeUrl } from '../lib/escape.js';
+import { onRouteLeave } from '../lib/router.js';
 import { uniq } from '../lib/facets.js';
 
 const STORAGE_KEY = 'wte_admin_key';
@@ -40,8 +41,8 @@ export function renderAdmin(app) {
 
   const root = app.querySelector('#admin-root');
 
-  // 해시가 바뀌면 모든 폴링/타이머 회수
-  window.addEventListener('hashchange', runAllCleanups, { once: true });
+  // 다른 라우트로 이동하면 모든 폴링/타이머/구독 회수 (라우터 중앙 정리 훅)
+  onRouteLeave(runAllCleanups);
 
   if (!getStoredKey()) {
     renderLogin(root);
@@ -1024,45 +1025,98 @@ async function renderForm(mount, shellRoot) {
 // ─────────────────────────────────────────────────────────
 // 식당 관리 탭
 // ─────────────────────────────────────────────────────────
-async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {}) {
-  mount.innerHTML = `<div class="state"><p>식당 목록을 불러오는 중...</p></div>`;
+// select 가 '__custom__' 이면 옆의 직접입력 칸을 열고 포커스, 아니면 닫고 비운다.
+function bindCustomSelectToggle(selectEl, inputEl) {
+  if (!selectEl || !inputEl) return;
+  selectEl.addEventListener('change', () => {
+    if (selectEl.value === '__custom__') {
+      inputEl.hidden = false;
+      inputEl.focus();
+    } else {
+      inputEl.hidden = true;
+      inputEl.value = '';
+    }
+  });
+}
 
-  let restaurants = [];
-  let options = { categories: CATEGORIES, areas: AREAS };
+// 식당·카페 관리 탭은 구조가 동일(capacity 제거 후 폼·행·메뉴 헬퍼 공통)해
+// kind 설정만 바꿔 하나의 renderEntityTab 으로 처리한다.
+const ENTITY_KINDS = {
+  restaurant: {
+    noun: '식당',
+    loadList: (o) => loadRestaurants(o),
+    nextId: (items) => nextRestaurantId(items),
+    setActive: setRestaurantActive,
+    remove: deleteRestaurant,
+    save: updateRestaurant,
+    create: createRestaurant,
+    showGroupDining: true,
+    deleteConfirmExtra: '\n(폴 후보에 남아있을 수 있어 비활성화를 권장)',
+    pickCategories: (o) => (o.categories && o.categories.length ? o.categories : CATEGORIES)
+  },
+  cafe: {
+    noun: '카페',
+    loadList: (o) => loadCafes(o),
+    nextId: (items) => nextCafeId(items),
+    setActive: setCafeActive,
+    remove: deleteCafe,
+    save: updateCafe,
+    create: createCafe,
+    showGroupDining: false,
+    deleteConfirmExtra: '',
+    pickCategories: (o) => (o.cafeCategories && o.cafeCategories.length ? o.cafeCategories : CAFE_CATEGORIES)
+  }
+};
+
+const renderRestaurantsTab = (mount, shellRoot, opts) => renderEntityTab(mount, shellRoot, 'restaurant', opts);
+const renderCafesTab = (mount, shellRoot, opts) => renderEntityTab(mount, shellRoot, 'cafe', opts);
+
+async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } = {}) {
+  const kind = ENTITY_KINDS[kindKey];
+  const rerender = (o) => renderEntityTab(mount, shellRoot, kindKey, o);
+
+  mount.innerHTML = `<div class="state"><p>${kind.noun} 목록을 불러오는 중...</p></div>`;
+
+  let items = [];
+  let options = {};
   try {
-    const [rs, opts] = await Promise.all([
-      loadRestaurants({ includeInactive: true }),
-      loadOptions().catch(() => ({ categories: CATEGORIES, areas: AREAS }))
+    const [list, opts] = await Promise.all([
+      kind.loadList({ includeInactive: true }),
+      loadOptions().catch(() => ({}))
     ]);
-    restaurants = rs;
-    if (opts.categories.length || opts.areas.length) options = opts;
+    items = list;
+    options = opts || {};
   } catch (err) {
     mount.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
     return;
   }
 
-  const editing = editingId ? restaurants.find((r) => r.id === editingId) : null;
+  const formOpts = {
+    categories: kind.pickCategories(options),
+    areas: options.areas && options.areas.length ? options.areas : AREAS
+  };
+  const editing = editingId ? items.find((r) => r.id === editingId) : null;
 
   mount.innerHTML = `
     <section class="stack-4">
       <div class="row-3" style="justify-content: space-between;">
         <div>
-          <h2>식당 관리</h2>
-          <p class="text-soft fs-small">행을 클릭해서 수정. 새 식당은 아래 폼으로 추가.</p>
+          <h2>${kind.noun} 관리</h2>
+          <p class="text-soft fs-small">행을 클릭해서 수정. 새 ${kind.noun}은 아래 폼으로 추가.</p>
         </div>
-        <span class="fs-small text-soft">총 ${restaurants.length}개 (활성 ${restaurants.filter((r) => r.active).length})</span>
+        <span class="fs-small text-soft">총 ${items.length}개 (활성 ${items.filter((r) => r.active).length})</span>
       </div>
 
       <div id="rest-list" class="rest-list">
-        ${restaurants.map((r) => restaurantRowHtml(r, r.id === editingId)).join('') || `<div class="state"><p>등록된 식당이 없습니다.</p></div>`}
+        ${items.map((r) => restaurantRowHtml(r, r.id === editingId)).join('') || `<div class="state"><p>등록된 ${kind.noun}이 없습니다.</p></div>`}
       </div>
 
       <section class="card stack-4">
         <div class="stack-3">
-          <h3>${editing ? `식당 수정 — ${escapeHtml(editing.name)}` : '새 식당 추가'}</h3>
+          <h3>${editing ? `${kind.noun} 수정 — ${escapeHtml(editing.name)}` : `새 ${kind.noun} 추가`}</h3>
           ${editing ? '' : `<p class="text-soft fs-small">ID는 자동 부여됩니다. 이름은 필수.</p>`}
         </div>
-        ${restaurantFormHtml(editing, { ...options, nextId: nextRestaurantId(restaurants), showGroupDining: true })}
+        ${restaurantFormHtml(editing, { ...formOpts, nextId: kind.nextId(items), showGroupDining: kind.showGroupDining })}
         <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
           <div class="row-2">
             ${editing ? `
@@ -1071,7 +1125,7 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
               <button type="button" class="btn btn-ghost rf-danger" id="rf-delete">완전 삭제</button>
             ` : ''}
           </div>
-          <button type="button" class="btn btn-primary" id="rf-save">${editing ? '수정 저장' : '식당 추가'}</button>
+          <button type="button" class="btn btn-primary" id="rf-save">${editing ? '수정 저장' : `${kind.noun} 추가`}</button>
         </div>
       </section>
     </section>
@@ -1082,59 +1136,34 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
     const row = e.target.closest('[data-restaurant-id]');
     if (!row) return;
     const rid = row.dataset.restaurantId;
-    renderRestaurantsTab(mount, shellRoot, { editingId: editingId === rid ? null : rid });
+    rerender({ editingId: editingId === rid ? null : rid });
   });
 
   if (editing) {
-    mount.querySelector('#rf-cancel').addEventListener('click', () => {
-      renderRestaurantsTab(mount, shellRoot);
-    });
+    mount.querySelector('#rf-cancel').addEventListener('click', () => rerender());
     mount.querySelector('#rf-toggle-active').addEventListener('click', async () => {
       try {
-        await setRestaurantActive({ adminKey: getStoredKey(), id: editing.id, active: !editing.active });
+        await kind.setActive({ adminKey: getStoredKey(), id: editing.id, active: !editing.active });
         showToast(editing.active ? '비활성화되었습니다' : '활성화되었습니다');
-        renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
+        rerender({ editingId: editing.id });
       } catch (err) {
         handleAdminError(err, mount, shellRoot);
       }
     });
     mount.querySelector('#rf-delete').addEventListener('click', async () => {
-      if (!confirm(`정말 "${editing.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.\n(폴 후보에 남아있을 수 있어 비활성화를 권장)`)) return;
+      if (!confirm(`정말 "${editing.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.${kind.deleteConfirmExtra}`)) return;
       try {
-        await deleteRestaurant({ adminKey: getStoredKey(), id: editing.id });
+        await kind.remove({ adminKey: getStoredKey(), id: editing.id });
         showToast('삭제되었습니다');
-        renderRestaurantsTab(mount, shellRoot);
+        rerender();
       } catch (err) {
         handleAdminError(err, mount, shellRoot);
       }
     });
   }
 
-  // 카테고리 select / direct input 토글
-  const categorySelect = mount.querySelector('#rf-category-select');
-  const categoryInput = mount.querySelector('#rf-category-input');
-  categorySelect.addEventListener('change', () => {
-    if (categorySelect.value === '__custom__') {
-      categoryInput.hidden = false;
-      categoryInput.focus();
-    } else {
-      categoryInput.hidden = true;
-      categoryInput.value = '';
-    }
-  });
-
-  // 지역 select / direct input 토글
-  const areaSelect = mount.querySelector('#rf-area-select');
-  const areaInput = mount.querySelector('#rf-area-input');
-  areaSelect.addEventListener('change', () => {
-    if (areaSelect.value === '__custom__') {
-      areaInput.hidden = false;
-      areaInput.focus();
-    } else {
-      areaInput.hidden = true;
-      areaInput.value = '';
-    }
-  });
+  bindCustomSelectToggle(mount.querySelector('#rf-category-select'), mount.querySelector('#rf-category-input'));
+  bindCustomSelectToggle(mount.querySelector('#rf-area-select'), mount.querySelector('#rf-area-input'));
 
   // 메뉴 표 — 행 추가 / 삭제
   mount.querySelector('#rf-menu-add')?.addEventListener('click', () => {
@@ -1160,225 +1189,11 @@ async function renderRestaurantsTab(mount, shellRoot, { editingId = null } = {})
   bindMenuImagesPreview(mount);
 
   mount.querySelector('#rf-save').addEventListener('click', async () => {
-    const id = (mount.querySelector('#rf-id').value || '').trim();
-    const name = (mount.querySelector('#rf-name').value || '').trim();
-    const category =
-      categorySelect.value === '__custom__'
-        ? (categoryInput.value || '').trim()
-        : categorySelect.value;
-    const area =
-      areaSelect.value === '__custom__'
-        ? (areaInput.value || '').trim()
-        : areaSelect.value;
-    const address = (mount.querySelector('#rf-address').value || '').trim();
-    const naverUrl = (mount.querySelector('#rf-naver-url').value || '').trim();
-    const imageUrl = (mount.querySelector('#rf-image-url').value || '').trim();
-    const walkingRaw = (mount.querySelector('#rf-walking').value || '').trim();
-    const walkingMinutes = walkingRaw === '' ? null : Number(walkingRaw);
-    const menuRows = [...mount.querySelectorAll('#rf-menu-rows .menu-edit-row')].map((row) => {
-      const priceRaw = (row.querySelector('.me-price').value || '').trim();
-      return {
-        name: row.querySelector('.me-name').value,
-        price: priceRaw === '' ? null : Number(priceRaw),
-        representative: row.querySelector('.me-rep').checked
-      };
-    });
-    const menusText = serializeMenus(menuRows);
-    const note = (mount.querySelector('#rf-note').value || '').trim();
-    const businessHours = (mount.querySelector('#rf-business-hours').value || '').trim();
+    const categorySelect = mount.querySelector('#rf-category-select');
+    const categoryInput = mount.querySelector('#rf-category-input');
+    const areaSelect = mount.querySelector('#rf-area-select');
+    const areaInput = mount.querySelector('#rf-area-input');
 
-    if (!id || !name) {
-      showToast('이름은 필수입니다', { error: true });
-      return;
-    }
-    if (naverUrl && !/^https?:\/\//i.test(naverUrl)) {
-      showToast('네이버 링크는 http(s)://로 시작해야 합니다', { error: true });
-      return;
-    }
-    if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
-      showToast('썸네일 이미지 URL은 http(s)://로 시작해야 합니다', { error: true });
-      return;
-    }
-    if (walkingMinutes !== null && (isNaN(walkingMinutes) || walkingMinutes < 0)) {
-      showToast('도보 시간은 0 이상의 숫자여야 합니다', { error: true });
-      return;
-    }
-
-    const menuImageUrls = parseMenuImageUrls(mount.querySelector('#rf-menu-images')?.value);
-    if (menuImageUrls.some((u) => !/^https?:\/\//i.test(u))) {
-      showToast('메뉴판 이미지 URL은 모두 http(s)://로 시작해야 합니다', { error: true });
-      return;
-    }
-
-    const isGroupDining = mount.querySelector('#rf-group-dining')?.checked || false;
-    const closedDays = [...mount.querySelectorAll('.rf-closed-day:checked')].map((el) => el.value);
-
-    try {
-      if (editing) {
-        await updateRestaurant({
-          adminKey: getStoredKey(),
-          id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining, menuImageUrls, closedDays }
-        });
-        showToast('수정되었습니다');
-        renderRestaurantsTab(mount, shellRoot, { editingId: editing.id });
-      } else {
-        await createRestaurant({
-          adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, isGroupDining, menuImageUrls, closedDays
-        });
-        showToast('식당이 추가되었습니다');
-        renderRestaurantsTab(mount, shellRoot, { editingId: id });
-      }
-    } catch (err) {
-      handleAdminError(err, mount, shellRoot);
-    }
-  });
-}
-
-// ─────────────────────────────────────────────────────────
-// 카페 관리 탭 — 식당 관리 탭 미러 (폼·행·메뉴 헬퍼 재사용, capacity 없음)
-// ─────────────────────────────────────────────────────────
-async function renderCafesTab(mount, shellRoot, { editingId = null } = {}) {
-  mount.innerHTML = `<div class="state"><p>카페 목록을 불러오는 중...</p></div>`;
-
-  let cafes = [];
-  let options = { cafeCategories: CAFE_CATEGORIES, areas: AREAS };
-  try {
-    const [cs, opts] = await Promise.all([
-      loadCafes({ includeInactive: true }),
-      loadOptions().catch(() => ({ cafeCategories: CAFE_CATEGORIES, areas: AREAS }))
-    ]);
-    cafes = cs;
-    if ((opts.cafeCategories && opts.cafeCategories.length) || (opts.areas && opts.areas.length)) options = opts;
-  } catch (err) {
-    mount.innerHTML = `<div class="state state-error"><p>${escapeHtml(err.message)}</p></div>`;
-    return;
-  }
-
-  const formOpts = {
-    categories: options.cafeCategories && options.cafeCategories.length ? options.cafeCategories : CAFE_CATEGORIES,
-    areas: options.areas && options.areas.length ? options.areas : AREAS
-  };
-  const editing = editingId ? cafes.find((c) => c.id === editingId) : null;
-
-  mount.innerHTML = `
-    <section class="stack-4">
-      <div class="row-3" style="justify-content: space-between;">
-        <div>
-          <h2>카페 관리</h2>
-          <p class="text-soft fs-small">행을 클릭해서 수정. 새 카페는 아래 폼으로 추가.</p>
-        </div>
-        <span class="fs-small text-soft">총 ${cafes.length}개 (활성 ${cafes.filter((c) => c.active).length})</span>
-      </div>
-
-      <div id="rest-list" class="rest-list">
-        ${cafes.map((c) => restaurantRowHtml(c, c.id === editingId)).join('') || `<div class="state"><p>등록된 카페가 없습니다.</p></div>`}
-      </div>
-
-      <section class="card stack-4">
-        <div class="stack-3">
-          <h3>${editing ? `카페 수정 — ${escapeHtml(editing.name)}` : '새 카페 추가'}</h3>
-          ${editing ? '' : `<p class="text-soft fs-small">ID는 자동 부여됩니다. 이름은 필수.</p>`}
-        </div>
-        ${restaurantFormHtml(editing, { ...formOpts, nextId: nextCafeId(cafes) })}
-        <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
-          <div class="row-2">
-            ${editing ? `
-              <button type="button" class="btn btn-ghost" id="rf-cancel">취소</button>
-              <button type="button" class="btn btn-outline" id="rf-toggle-active">${editing.active ? '비활성화' : '활성화'}</button>
-              <button type="button" class="btn btn-ghost rf-danger" id="rf-delete">완전 삭제</button>
-            ` : ''}
-          </div>
-          <button type="button" class="btn btn-primary" id="rf-save">${editing ? '수정 저장' : '카페 추가'}</button>
-        </div>
-      </section>
-    </section>
-  `;
-
-  // 행 클릭 → 수정 모드
-  mount.querySelector('#rest-list')?.addEventListener('click', (e) => {
-    const row = e.target.closest('[data-restaurant-id]');
-    if (!row) return;
-    const cid = row.dataset.restaurantId;
-    renderCafesTab(mount, shellRoot, { editingId: editingId === cid ? null : cid });
-  });
-
-  if (editing) {
-    mount.querySelector('#rf-cancel').addEventListener('click', () => {
-      renderCafesTab(mount, shellRoot);
-    });
-    mount.querySelector('#rf-toggle-active').addEventListener('click', async () => {
-      try {
-        await setCafeActive({ adminKey: getStoredKey(), id: editing.id, active: !editing.active });
-        showToast(editing.active ? '비활성화되었습니다' : '활성화되었습니다');
-        renderCafesTab(mount, shellRoot, { editingId: editing.id });
-      } catch (err) {
-        handleAdminError(err, mount, shellRoot);
-      }
-    });
-    mount.querySelector('#rf-delete').addEventListener('click', async () => {
-      if (!confirm(`정말 "${editing.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
-      try {
-        await deleteCafe({ adminKey: getStoredKey(), id: editing.id });
-        showToast('삭제되었습니다');
-        renderCafesTab(mount, shellRoot);
-      } catch (err) {
-        handleAdminError(err, mount, shellRoot);
-      }
-    });
-  }
-
-  // 카테고리 select / direct input 토글
-  const categorySelect = mount.querySelector('#rf-category-select');
-  const categoryInput = mount.querySelector('#rf-category-input');
-  categorySelect.addEventListener('change', () => {
-    if (categorySelect.value === '__custom__') {
-      categoryInput.hidden = false;
-      categoryInput.focus();
-    } else {
-      categoryInput.hidden = true;
-      categoryInput.value = '';
-    }
-  });
-
-  // 지역 select / direct input 토글
-  const areaSelect = mount.querySelector('#rf-area-select');
-  const areaInput = mount.querySelector('#rf-area-input');
-  areaSelect.addEventListener('change', () => {
-    if (areaSelect.value === '__custom__') {
-      areaInput.hidden = false;
-      areaInput.focus();
-    } else {
-      areaInput.hidden = true;
-      areaInput.value = '';
-    }
-  });
-
-  // 메뉴 표 — 행 추가 / 삭제
-  mount.querySelector('#rf-menu-add')?.addEventListener('click', () => {
-    mount.querySelector('#rf-menu-rows').insertAdjacentHTML('beforeend', menuRowHtml({}));
-  });
-  mount.querySelector('#rf-menu-rows')?.addEventListener('click', (e) => {
-    const del = e.target.closest('.me-del');
-    if (del) del.closest('.menu-edit-row').remove();
-  });
-
-  // 썸네일 URL → 미리보기 라이브 갱신
-  const imageUrlInput = mount.querySelector('#rf-image-url');
-  const imagePreview = mount.querySelector('#rf-image-preview');
-  imageUrlInput?.addEventListener('input', () => {
-    const url = imageUrlInput.value.trim();
-    if (url) {
-      imagePreview.src = url;
-      imagePreview.hidden = false;
-    } else {
-      imagePreview.hidden = true;
-    }
-  });
-  bindMenuImagesPreview(mount);
-
-  mount.querySelector('#rf-save').addEventListener('click', async () => {
     const id = (mount.querySelector('#rf-id').value || '').trim();
     const name = (mount.querySelector('#rf-name').value || '').trim();
     const category =
@@ -1429,22 +1244,21 @@ async function renderCafesTab(mount, shellRoot, { editingId = null } = {}) {
     }
     const closedDays = [...mount.querySelectorAll('.rf-closed-day:checked')].map((el) => el.value);
 
+    // 공통 필드. 식당만 isGroupDining 을 추가로 보낸다(카페 RPC는 이 필드가 없어 무시됨).
+    const fields = { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls, closedDays };
+    if (kind.showGroupDining) {
+      fields.isGroupDining = mount.querySelector('#rf-group-dining')?.checked || false;
+    }
+
     try {
       if (editing) {
-        await updateCafe({
-          adminKey: getStoredKey(),
-          id: editing.id,
-          patch: { name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls, closedDays }
-        });
+        await kind.save({ adminKey: getStoredKey(), id: editing.id, patch: fields });
         showToast('수정되었습니다');
-        renderCafesTab(mount, shellRoot, { editingId: editing.id });
+        rerender({ editingId: editing.id });
       } else {
-        await createCafe({
-          adminKey: getStoredKey(),
-          id, name, category, area, address, naverUrl, imageUrl, walkingMinutes, menusText, note, businessHours, menuImageUrls, closedDays
-        });
-        showToast('카페가 추가되었습니다');
-        renderCafesTab(mount, shellRoot, { editingId: id });
+        await kind.create({ adminKey: getStoredKey(), id, ...fields });
+        showToast(`${kind.noun}이 추가되었습니다`);
+        rerender({ editingId: id });
       }
     } catch (err) {
       handleAdminError(err, mount, shellRoot);
@@ -1606,7 +1420,7 @@ function restaurantRowHtml(r, isEditing) {
       ${areaBadgeHtml(r.area)}
       ${r.isGroupDining ? verifiedSealHtml({ size: '1.6rem' }) : ''}
       <span class="rest-name">${escapeHtml(r.name)}</span>
-      ${r.naverUrl ? `<a class="rest-naver" href="${escapeHtml(r.naverUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
+      ${safeUrl(r.naverUrl) ? `<a class="rest-naver" href="${escapeHtml(safeUrl(r.naverUrl))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
       <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>
     </div>
   `;
