@@ -51,6 +51,13 @@ alter table public.restaurants add column if not exists business_hours text;
 alter table public.restaurants add column if not exists is_group_dining boolean not null default false;
 alter table public.restaurants add column if not exists menu_image_urls text[] not null default '{}';
 alter table public.restaurants add column if not exists closed_days text[] not null default '{}';
+-- 데이터 출처 구분: 'ai_draft'(=/add-data 스킬이 web search로 만든 미검토 초안) / 'manual'(관리자 입력 또는 검토 완료) / null(레거시).
+-- active=false 만으로는 "관리자가 수동 숨긴 식당"과 "AI 미검토 초안"을 구분할 수 없어 별도 컬럼으로 표시한다.
+alter table public.restaurants add column if not exists source text;
+alter table public.restaurants add column if not exists source_note text;
+alter table public.restaurants drop constraint if exists restaurants_source_check;
+alter table public.restaurants add constraint restaurants_source_check
+  check (source is null or source in ('ai_draft','manual'));
 
 -- 카페 — restaurants와 동일 구조에서 회식 수용인원(capacity_*)만 제외.
 -- 점심 식사 후 둘러볼 카페 목록. 투표 후보가 아니라 단순 조회용.
@@ -73,6 +80,12 @@ alter table public.cafes add column if not exists image_url text;
 alter table public.cafes add column if not exists business_hours text;
 alter table public.cafes add column if not exists menu_image_urls text[] not null default '{}';
 alter table public.cafes add column if not exists closed_days text[] not null default '{}';
+-- 식당과 동일한 데이터 출처 구분 컬럼 (ai_draft / manual / null).
+alter table public.cafes add column if not exists source text;
+alter table public.cafes add column if not exists source_note text;
+alter table public.cafes drop constraint if exists cafes_source_check;
+alter table public.cafes add constraint cafes_source_check
+  check (source is null or source in ('ai_draft','manual'));
 
 create table if not exists public.polls (
   id                     text primary key,
@@ -624,7 +637,11 @@ begin
   if not exists (select 1 from public.restaurants where id = p_id) then
     raise exception 'restaurant_not_found';
   end if;
-  update public.restaurants set active = coalesce(p_active, true) where id = p_id;
+  -- 활성화 = AI 초안 졸업: ai_draft 였던 식당을 공개하면 manual 로 승격(검토 완료로 간주).
+  update public.restaurants
+  set active = coalesce(p_active, true),
+      source = case when coalesce(p_active, true) and source = 'ai_draft' then 'manual' else source end
+  where id = p_id;
 end;
 $$;
 
@@ -811,7 +828,11 @@ begin
   if not exists (select 1 from public.cafes where id = p_id) then
     raise exception 'cafe_not_found';
   end if;
-  update public.cafes set active = coalesce(p_active, true) where id = p_id;
+  -- 활성화 = AI 초안 졸업 (식당과 동일).
+  update public.cafes
+  set active = coalesce(p_active, true),
+      source = case when coalesce(p_active, true) and source = 'ai_draft' then 'manual' else source end
+  where id = p_id;
 end;
 $$;
 
@@ -1047,3 +1068,31 @@ insert into public.app_options (kind, value, sort_order) values
   ('cafe_category', '브런치',     6),
   ('cafe_category', '기타',       7)
 on conflict (kind, value) do nothing;
+
+-- ─────────────────────────────────────────────────────────
+-- 9. Storage — 식당/카페 이미지 업로드 (하이브리드: URL 붙여넣기 + 파일 업로드)
+--    public read 버킷 1개 + 폴더(restaurants/{id}, cafes/{id}).
+--    예외 규칙: 이미지 업로드만 RPC를 거치지 않는다. storage.objects는 DB 행이 아닌
+--    public 자산이라, anon INSERT 정책(images 버킷·restaurants/cafes prefix 한정 +
+--    2MB·이미지 MIME 제한)으로 클라이언트가 직접 업로드한다. 업로드 결과 public URL을
+--    기존 image_url/menu_image_urls 저장 경로에 넣으므로 RPC 무결성 검증은 유지된다.
+--    덮어쓰기·삭제 정책은 일부러 두지 않는다(정리는 운영자가 대시보드/스크립트로).
+-- ─────────────────────────────────────────────────────────
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('images', 'images', true, 2097152, array['image/jpeg','image/png','image/webp','image/gif'])
+on conflict (id) do update
+  set public = true,
+      file_size_limit = 2097152,
+      allowed_mime_types = array['image/jpeg','image/png','image/webp','image/gif'];
+
+drop policy if exists images_public_read on storage.objects;
+create policy images_public_read on storage.objects
+  for select using (bucket_id = 'images');
+
+drop policy if exists images_anon_insert on storage.objects;
+create policy images_anon_insert on storage.objects
+  for insert to anon, authenticated
+  with check (
+    bucket_id = 'images'
+    and (storage.foldername(name))[1] in ('restaurants','cafes')
+  );

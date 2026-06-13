@@ -43,7 +43,9 @@ function mapRestaurant(r) {
     active: !!r.active,
     isGroupDining: !!r.is_group_dining,
     menuImageUrls: Array.isArray(r.menu_image_urls) ? r.menu_image_urls : [],
-    closedDays: Array.isArray(r.closed_days) ? r.closed_days : []
+    closedDays: Array.isArray(r.closed_days) ? r.closed_days : [],
+    source: r.source || null,
+    sourceNote: r.source_note || ''
   };
 }
 
@@ -71,7 +73,9 @@ function mapCafe(c) {
     businessHours: c.business_hours || '',
     active: !!c.active,
     menuImageUrls: Array.isArray(c.menu_image_urls) ? c.menu_image_urls : [],
-    closedDays: Array.isArray(c.closed_days) ? c.closed_days : []
+    closedDays: Array.isArray(c.closed_days) ? c.closed_days : [],
+    source: c.source || null,
+    sourceNote: c.source_note || ''
   };
 }
 
@@ -435,6 +439,38 @@ export async function setCafeActive({ adminKey, id, active }) {
   });
   if (error) throwTranslated(error);
   return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────
+// Storage 업로드 — 식당/카페 이미지 (하이브리드: URL 붙여넣기와 병행)
+//   images 버킷(public)에 올리고 public URL을 반환한다. 반환 URL을 기존
+//   image_url/menu_image_urls 저장 경로에 그대로 넣으므로 RPC 무결성 검증은 유지.
+//   schema.sql 섹션 9의 anon insert 정책(images 버킷 + restaurants/cafes prefix,
+//   2MB·이미지 MIME 제한)에 의존한다.
+// ─────────────────────────────────────────────────────────
+const IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+const IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+// kind: 'restaurants' | 'cafes', role: 'thumb' | 'menu'
+export async function uploadImage({ file, kind, entityId, role }) {
+  if (!file) throw new Error('업로드할 파일이 없습니다');
+  if (!IMAGE_MIME.includes(file.type)) {
+    throw new Error('이미지 형식만 가능합니다 (JPEG·PNG·WebP·GIF)');
+  }
+  if (file.size > IMAGE_MAX_BYTES) {
+    throw new Error('이미지는 2MB 이하만 업로드할 수 있습니다');
+  }
+  const folder = kind === 'cafes' ? 'cafes' : 'restaurants';
+  const safeId = String(entityId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '') || 'unknown';
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const rand = Math.random().toString(36).slice(2, 8);
+  const path = `${folder}/${safeId}/${role === 'menu' ? 'menu' : 'thumb'}-${Date.now()}-${rand}.${ext}`;
+  const { error } = await supabase.storage
+    .from('images')
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+  if (error) throw new Error(`이미지 업로드 실패: ${error.message}`);
+  const { data } = supabase.storage.from('images').getPublicUrl(path);
+  return data.publicUrl;
 }
 
 // ─────────────────────────────────────────────────────────

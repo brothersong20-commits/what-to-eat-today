@@ -59,7 +59,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 | `toast.js` | `showToast(msg, opts)` | 토스트 피드백 |
 | `router.js` | `defineRoute` `start` `navigate` `currentPath` `onRouteLeave(fn)` | 해시 라우터 · 페이지 정리(cleanup) 등록 |
 | `modal.js` | `openModal(opts)` | 오버레이 모달 수명주기·접근성 |
-| `supabase.js` | `loadRestaurants/Cafes/Polls/Poll/Votes/Likes/Options` · `submitVote` `toggleLike` · `create/update/delete*` RPC(poll·restaurant·cafe·option) · `setRestaurant/CafeActive` · `subscribeVotes/Likes`/`unsubscribe` | 데이터 레이어 단일 진입점. `supabase` 클라이언트는 내부 전용(export 안 함) |
+| `supabase.js` | `loadRestaurants/Cafes/Polls/Poll/Votes/Likes/Options` · `submitVote` `toggleLike` · `create/update/delete*` RPC(poll·restaurant·cafe·option) · `setRestaurant/CafeActive` · `uploadImage` · `subscribeVotes/Likes`/`unsubscribe` | 데이터 레이어 단일 진입점. `supabase` 클라이언트는 내부 전용(export 안 함) |
 
 ### src/components (HTML 헬퍼/위젯)
 
@@ -78,7 +78,9 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 이 프로젝트에서 코드만 봐서는 즉시 보이지 않는 제약과 관습들. 변경 전 반드시 확인할 것.
 
-- **쓰기는 항상 RPC 경유**: 클라이언트는 `anon` (publishable) 키만 가지고, polls/votes/restaurants에 대한 RLS 정책은 SELECT만 허용한다. INSERT/UPDATE/DELETE는 `security definer`로 선언된 RPC(`submit_vote`, `create_poll`, `update_poll`)를 통해서만 가능하다. 새 쓰기 작업이 필요하면 `supabase/schema.sql`에 RPC를 먼저 정의하고 클라이언트에서 호출한다.
+- **쓰기는 항상 RPC 경유 (이미지 업로드만 예외)**: 클라이언트는 `anon` (publishable) 키만 가지고, polls/votes/restaurants에 대한 RLS 정책은 SELECT만 허용한다. INSERT/UPDATE/DELETE는 `security definer`로 선언된 RPC(`submit_vote`, `create_poll`, `update_poll`)를 통해서만 가능하다. 새 쓰기 작업이 필요하면 `supabase/schema.sql`에 RPC를 먼저 정의하고 클라이언트에서 호출한다. **유일한 예외는 Storage 이미지 업로드** — `storage.objects`는 DB 행이 아닌 public 자산이라 `images` 버킷·`restaurants`/`cafes` prefix 한정 + 2MB·이미지 MIME 제한의 anon insert 정책(schema.sql 섹션 9)으로 클라이언트가 직접 업로드한다(`uploadImage`). 업로드 결과 public URL을 기존 `image_url`/`menu_image_urls` 저장 경로에 넣으므로 RPC 무결성 검증은 유지된다. 썸네일·메뉴판은 URL 붙여넣기와 파일 업로드를 **병행**(하이브리드).
+
+- **AI 초안 출처 컬럼 (`source`/`source_note`)**: `restaurants`/`cafes`의 `source`는 `'ai_draft'`(=`add-data` 스킬이 web search로 만든 미검토 초안) / `'manual'`(관리자 입력 또는 검토 완료) / `null`(레거시). CHECK 제약으로 값 강제. **관리자 폼 수동 생성은 `source`를 보내지 않아 `null`로 남고**(=초안 아님으로 취급), 배지/배너는 `source==='ai_draft' && !active`일 때만 뜬다. **초안 졸업은 활성화 시점**: `set_restaurant_active`/`set_cafe_active`가 활성화할 때 `ai_draft`→`manual`로 승격한다(별도 인자 없이 본문에서 처리, 시그니처 불변이라 grant 변경 불필요). `add-data` 스킬은 클라이언트가 아니라 운영자 MCP 작업이라 RPC가 아닌 직접 insert를 쓴다(`active=false`, `source='ai_draft'`).
 
 - **관리자 인증 (이중 검증)**: `/#/admin` 진입 시 클라이언트의 `VITE_ADMIN_KEY`와 비교 후 `localStorage.wte_admin_key`에 저장한다. `create_poll`·`update_poll` RPC는 `p_admin_key` 인자를 받아 `private.app_config` 테이블의 `admin_key` 값과 비교한다. private 스키마는 anon/authenticated에 GRANT가 없어 클라이언트가 직접 SELECT 불가하고, 함수는 `security definer`로 우회해서 읽는다. **두 키는 동일 값으로 맞춰야 한다.** 변경 시 SQL Editor에서 `update private.app_config set value = '새 값' where key = 'admin_key';` 실행 + `.env.local`의 `VITE_ADMIN_KEY` 갱신.
 

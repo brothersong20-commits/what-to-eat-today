@@ -2291,6 +2291,40 @@ textarea {
   background: rgba(0, 0, 0, 0.08);
   color: var(--text-soft);
 }
+/* AI 초안 배지 — 마감임박 배지와 동일한 앰버 톤 토큰 재사용 */
+.rest-flag.is-draft {
+  background: var(--badge-warn-bg);
+  color: var(--badge-warn-fg);
+}
+/* AI 초안 폼 배너 — 검토 안내 + 출처 */
+.rf-draft-banner {
+  background: var(--badge-warn-bg);
+  border: 1px solid var(--badge-warn-fg);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  color: var(--badge-warn-fg);
+}
+.rf-draft-banner strong {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+.rf-draft-banner p {
+  margin: 0.3rem 0 0;
+}
+/* 하이브리드 이미지 업로드 — URL 입력과 병행하는 파일 업로드 버튼 */
+.rf-upload-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.rf-upload-btn {
+  cursor: pointer;
+}
+.rf-upload-btn.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
 .rf-danger {
   color: var(--danger);
 }

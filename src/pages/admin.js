@@ -1,4 +1,4 @@
-import { createPoll, updatePoll, deletePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive, loadCafes, createCafe, updateCafe, deleteCafe, setCafeActive, loadOptions, createOption, updateOption, deleteOption } from '../lib/supabase.js';
+import { createPoll, updatePoll, deletePoll, loadPolls, loadRestaurants, loadVotes, subscribeVotes, unsubscribe, createRestaurant, updateRestaurant, deleteRestaurant, setRestaurantActive, loadCafes, createCafe, updateCafe, deleteCafe, setCafeActive, loadOptions, createOption, updateOption, deleteOption, uploadImage } from '../lib/supabase.js';
 import { CATEGORIES, AREAS, CAFE_CATEGORIES } from '../lib/config.js';
 import { serializeMenus } from '../lib/menus.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
@@ -1104,7 +1104,7 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
           <h2>${kind.noun} 관리</h2>
           <p class="text-soft fs-small">행을 클릭해서 수정. 새 ${kind.noun}은 아래 폼으로 추가.</p>
         </div>
-        <span class="fs-small text-soft">총 ${items.length}개 (활성 ${items.filter((r) => r.active).length})</span>
+        <span class="fs-small text-soft">총 ${items.length}개 (활성 ${items.filter((r) => r.active).length}${items.filter((r) => r.source === 'ai_draft' && !r.active).length ? ` · AI초안 ${items.filter((r) => r.source === 'ai_draft' && !r.active).length}` : ''})</span>
       </div>
 
       <div id="rest-list" class="rest-list">
@@ -1116,12 +1116,19 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
           <h3>${editing ? `${kind.noun} 수정 — ${escapeHtml(editing.name)}` : `새 ${kind.noun} 추가`}</h3>
           ${editing ? '' : `<p class="text-soft fs-small">ID는 자동 부여됩니다. 이름은 필수.</p>`}
         </div>
+        ${editing && editing.source === 'ai_draft' ? `
+          <div class="rf-draft-banner">
+            <strong>AI 초안입니다 — 검토 후 활성화하세요.</strong>
+            <p class="fs-small">web search로 자동 작성된 내용입니다. 가격·메뉴·영업시간을 확인하고, 이미지(썸네일·메뉴판)를 추가하세요. ‘검토 완료 · 활성화’를 누르면 공개되고 초안 표시가 사라집니다.</p>
+            ${editing.sourceNote ? `<p class="fs-small text-soft">출처/메모: ${escapeHtml(editing.sourceNote)}</p>` : ''}
+          </div>
+        ` : ''}
         ${restaurantFormHtml(editing, { ...formOpts, nextId: kind.nextId(items), showGroupDining: kind.showGroupDining })}
         <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
           <div class="row-2">
             ${editing ? `
               <button type="button" class="btn btn-ghost" id="rf-cancel">취소</button>
-              <button type="button" class="btn btn-outline" id="rf-toggle-active">${editing.active ? '비활성화' : '활성화'}</button>
+              <button type="button" class="btn btn-outline" id="rf-toggle-active">${editing.active ? '비활성화' : (editing.source === 'ai_draft' ? '검토 완료 · 활성화' : '활성화')}</button>
               <button type="button" class="btn btn-ghost rf-danger" id="rf-delete">완전 삭제</button>
             ` : ''}
           </div>
@@ -1140,6 +1147,8 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
   });
 
   if (editing) {
+    // 행 클릭/저장 후 편집 폼이 보이도록 스크롤(목록이 길 때 폼을 찾아 내려가는 마찰 제거).
+    requestAnimationFrame(() => mount.querySelector('#rest-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     mount.querySelector('#rf-cancel').addEventListener('click', () => rerender());
     mount.querySelector('#rf-toggle-active').addEventListener('click', async () => {
       try {
@@ -1187,6 +1196,53 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
     }
   });
   bindMenuImagesPreview(mount);
+
+  // 이미지 파일 업로드(하이브리드) — 업로드된 public URL을 기존 URL 필드/textarea에 채워
+  // 기존 저장 경로(image_url/menu_image_urls)와 미리보기 로직을 그대로 재사용한다.
+  const uploadKind = kindKey === 'cafe' ? 'cafes' : 'restaurants';
+  const currentEntityId = () => (mount.querySelector('#rf-id')?.value || '').trim();
+  const imageFileInput = mount.querySelector('#rf-image-file');
+  imageFileInput?.addEventListener('change', async () => {
+    const file = imageFileInput.files[0];
+    if (!file) return;
+    const btn = mount.querySelector('label[for="rf-image-file"]');
+    btn?.classList.add('is-busy');
+    try {
+      const url = await uploadImage({ file, kind: uploadKind, entityId: currentEntityId(), role: 'thumb' });
+      imageUrlInput.value = url;
+      imageUrlInput.dispatchEvent(new Event('input'));
+      showToast('썸네일이 업로드되었습니다');
+    } catch (err) {
+      showToast(err.message || '업로드에 실패했습니다', { error: true });
+    } finally {
+      btn?.classList.remove('is-busy');
+      imageFileInput.value = '';
+    }
+  });
+
+  const menuFilesInput = mount.querySelector('#rf-menu-files');
+  menuFilesInput?.addEventListener('change', async () => {
+    const files = [...(menuFilesInput.files || [])];
+    if (!files.length) return;
+    const ta = mount.querySelector('#rf-menu-images');
+    const btn = mount.querySelector('label[for="rf-menu-files"]');
+    btn?.classList.add('is-busy');
+    try {
+      const urls = [];
+      for (const file of files) {
+        urls.push(await uploadImage({ file, kind: uploadKind, entityId: currentEntityId(), role: 'menu' }));
+      }
+      const existing = ta.value.trim();
+      ta.value = (existing ? existing + '\n' : '') + urls.join('\n');
+      ta.dispatchEvent(new Event('input'));
+      showToast(`메뉴판 이미지 ${urls.length}장이 업로드되었습니다`);
+    } catch (err) {
+      showToast(err.message || '업로드에 실패했습니다', { error: true });
+    } finally {
+      btn?.classList.remove('is-busy');
+      menuFilesInput.value = '';
+    }
+  });
 
   mount.querySelector('#rf-save').addEventListener('click', async () => {
     const categorySelect = mount.querySelector('#rf-category-select');
@@ -1250,6 +1306,10 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
       fields.isGroupDining = mount.querySelector('#rf-group-dining')?.checked || false;
     }
 
+    const saveBtn = mount.querySelector('#rf-save');
+    const saveLabel = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = '저장 중...';
     try {
       if (editing) {
         await kind.save({ adminKey: getStoredKey(), id: editing.id, patch: fields });
@@ -1260,7 +1320,10 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
         showToast(`${kind.noun}이 추가되었습니다`);
         rerender({ editingId: id });
       }
+      // 성공 시 rerender가 DOM을 교체하므로 버튼 복구 불필요.
     } catch (err) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = saveLabel;
       handleAdminError(err, mount, shellRoot);
     }
   });
@@ -1421,6 +1484,7 @@ function restaurantRowHtml(r, isEditing) {
       ${r.isGroupDining ? verifiedSealHtml({ size: '1.6rem' }) : ''}
       <span class="rest-name">${escapeHtml(r.name)}</span>
       ${safeUrl(r.naverUrl) ? `<a class="rest-naver" href="${escapeHtml(safeUrl(r.naverUrl))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
+      ${r.source === 'ai_draft' && !r.active ? `<span class="rest-flag is-draft" title="AI가 web search로 만든 초안 — 검토 후 활성화하세요">AI 초안 · 검토 필요</span>` : ''}
       <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>
     </div>
   `;
@@ -1529,14 +1593,23 @@ function restaurantFormHtml(r, opts = {}) {
           <input type="url" id="rf-naver-url" class="input" value="${escapeHtml(v.naverUrl || '')}" placeholder="예: https://naver.me/xxxxxxxx" />
         </div>
         <div class="stack-3">
-          <label class="field-label" for="rf-image-url">썸네일 이미지 URL</label>
+          <label class="field-label" for="rf-image-url">썸네일 이미지</label>
           <input type="url" id="rf-image-url" class="input" value="${escapeHtml(v.imageUrl || '')}" placeholder="예: https://images.example.com/photo.jpg" />
-          <p class="text-soft fs-small">외부 이미지 링크를 붙여넣으면 식당 카드·목록에 썸네일로 표시됩니다.</p>
+          <div class="rf-upload-row">
+            <label class="btn btn-outline rf-upload-btn" for="rf-image-file">사진 파일 업로드</label>
+            <input type="file" id="rf-image-file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+            <span class="text-soft fs-small">URL 붙여넣기 또는 파일 업로드(2MB 이하, JPEG·PNG·WebP·GIF)</span>
+          </div>
           <img id="rf-image-preview" class="rf-image-preview" alt="썸네일 미리보기" src="${escapeHtml(v.imageUrl || '')}" ${v.imageUrl ? '' : 'hidden'} referrerpolicy="no-referrer" onerror="this.hidden = true" />
         </div>
         <div class="stack-3">
           <label class="field-label" for="rf-menu-images">메뉴판 이미지 URL (여러 장)</label>
           <textarea id="rf-menu-images" class="input" rows="3" style="height: auto; padding: 1rem 1.4rem; resize: vertical;" placeholder="한 줄에 하나씩. 예: https://images.example.com/menu1.jpg">${escapeHtml((v.menuImageUrls || []).join('\n'))}</textarea>
+          <div class="rf-upload-row">
+            <label class="btn btn-outline rf-upload-btn" for="rf-menu-files">메뉴판 파일 업로드 (여러 장)</label>
+            <input type="file" id="rf-menu-files" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
+            <span class="text-soft fs-small">URL을 줄마다 붙여넣거나 파일을 올리면 위 칸에 추가됩니다(각 2MB 이하).</span>
+          </div>
           <p class="text-soft fs-small">한 줄에 URL 하나씩. http(s)://로 시작해야 하며, 둘러보기에서 "메뉴판 보기"로 크게 볼 수 있습니다.</p>
           <div id="rf-menu-images-preview" class="rf-menuimg-preview">${(v.menuImageUrls || []).map((u) => `<img class="rf-menuimg-thumb" src="${escapeHtml(u)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" />`).join('')}</div>
         </div>
