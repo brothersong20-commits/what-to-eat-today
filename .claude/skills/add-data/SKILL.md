@@ -115,4 +115,6 @@ project_id를 재확인한다. 같은 이름이 이미 있으면(동명/재등�
 - `SKILL.md` — 이 워크플로.
 - `scripts/naver_lookup.py` — 네이버 지역검색(공식 API)로 기본정보(카테고리·주소·좌표·링크·전화) 자동 채움.
 - `scripts/build_insert_sql.py` — 구조화 JSON → 안전한 단일 INSERT(이스케이프·menus_text·배열 처리).
+- `scripts/upload_image.py` — 로컬 이미지 파일 → Supabase Storage(`images` 버킷) 업로드, public URL 반환(kind 검증·매직바이트·2MB 가드). 이미지 백필용.
+- `scripts/audit_naver.py` — 기존 DB(식당·카페)를 네이버 지역검색으로 점검(존재·카테고리·주소, **보고서 전용·DB 미수정**).
 - `references/fields.md` — 컬럼/JSON 필드 의미, 비워두는 규칙, area·이미지 처리, 예시.
