@@ -47,8 +47,21 @@ from public.restaurants where id ~ '^R\d+$';
 (project_id는 `.env.local`의 `VITE_SUPABASE_URL` 서브도메인 ref — 현재 프로젝트 `mipyuuphhdtdwyxhxpjw`.
 불확실하면 `list_projects`로 확인.)
 
-### 3. web search 조사 — 최신·사실 우선
-다음을 조사하고 **출처 URL과 날짜를 함께 기록**한다. 최근 1~2년 자료를 우선한다.
+### 3. 조사 (하이브리드: 공식 API 먼저 → web search 보완)
+
+**3-a. 네이버 지역검색(공식 API)으로 기본정보 자동 채움 — 합법·우선.**
+ToS·봇탐지 문제가 없는 공식 경로다. 먼저 실행해 **카테고리·주소·좌표·네이버 link·전화**를 채운다.
+```bash
+python .claude/skills/add-data/scripts/naver_lookup.py "현대옥 송도신도시점"
+```
+- 결과 후보 중 입력한 이름/주소와 맞는 항목을 고른다(여러 개면 주소로 판별).
+- `naver_category`(예: `음식점>한식>해장국`)를 우리 enum(한식·중식·…/프랜차이즈·…)으로 매핑.
+- `road_address`→`address`, `link`→`naver_url`(입력 링크가 있으면 그걸 우선), `telephone`은 있으면 `note`에 보탬.
+- **이 API에 메뉴·가격·영업시간·사진은 없다.** 그건 3-b로.
+- 키 미설정/오류면 이 단계는 건너뛰고 web search로만 진행(보고에 "네이버 API 미사용" 명시).
+
+**3-b. web search로 나머지 보완 — 최신·사실 우선.**
+공식 API에 없는 것(메뉴·가격·영업시간·휴무·대표메뉴)을 조사하고 **출처 URL과 날짜를 함께 기록**한다. 최근 1~2년 우선.
 - **카테고리**: 식당 = `한식·중식·일식·양식·분식·회·고기·기타` 중 하나. 카페 = `프랜차이즈·개인카페·
   베이커리·디저트·로스터리·브런치·기타` 중 하나. 애매하면 `기타`.
 - **대표/밀고 있는 메뉴**: 많이 추천되거나 가게 시그니처. 대표는 `representative: true`.
@@ -58,6 +71,10 @@ from public.restaurants where id ~ '^R\d+$';
 - **단체 회식 적합성**(식당만): 룸/단체석/큰 수용 언급이 있으면 `is_group_dining: true` 후보. 불확실하면 false.
 
 자세한 필드 의미·비워두는 규칙은 [references/fields.md](references/fields.md) 참고.
+
+**가격 출처 주의**: `map.naver.com`(네이버 지도/플레이스 메뉴 탭)은 WebFetch로 **가져올 수 없다**(차단). 가격은
+다이닝코드·블로그·가게 공식 등 다른 출처를 우선 시도하고, 그래도 지점 가격이 안 잡히면 **관리자에게 네이버
+'메뉴' 탭 스크린샷을 요청**해 그 값을 넣는다(타 지점 가격을 이 지점 가격인 양 넣지 말 것).
 
 **확신이 낮으면 비우고 `source_note`에 "미확인 — 관리자 확인 필요"로 남긴다. 절대 지어내지 않는다.**
 
@@ -89,12 +106,13 @@ project_id를 재확인한다. 같은 이름이 이미 있으면(동명/재등�
 - 항상 `active=false`, `source='ai_draft'`. 단 `active=false`는 **앱 UI 게이트일 뿐 보안 경계가
   아니다**(`loadRestaurants`가 기본 `active=true`만 로드하지만 RLS는 anon 전체 SELECT 허용).
   → `source_note` 등에 **민감정보 금지**.
-- **`source` 졸업은 아직 수동·미구현**: 관리자가 활성화해도 현재는 `source`가 `ai_draft`로 남는다
-  (활성화 시 `manual` 전환은 후속 작업). 표시만 남을 뿐 기능 영향은 없다.
+- **`source` 졸업은 활성화 시 자동**: 관리자가 초안을 활성화하면 `set_restaurant_active`/`set_cafe_active`가
+  `ai_draft`→`manual`로 승격한다(검토 완료로 간주). 즉 활성화 = 초안 졸업.
 - SQL은 손으로 조립하지 말고 **반드시 스크립트로 생성**한다.
 - ID 채번은 매번 DB max를 재조회한다.
 
 ## 파일 구성
 - `SKILL.md` — 이 워크플로.
+- `scripts/naver_lookup.py` — 네이버 지역검색(공식 API)로 기본정보(카테고리·주소·좌표·링크·전화) 자동 채움.
 - `scripts/build_insert_sql.py` — 구조화 JSON → 안전한 단일 INSERT(이스케이프·menus_text·배열 처리).
 - `references/fields.md` — 컬럼/JSON 필드 의미, 비워두는 규칙, area·이미지 처리, 예시.
