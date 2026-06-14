@@ -1,10 +1,18 @@
 :root {
-  /* ───── Color: Greens (4-tier) ───── */
-  --green-starbucks: #006241;
-  --green-accent: #00754a;
-  --green-house: #1e3932;
+  /* ───── Brand: Leaf Green (의미 토큰) ─────
+     what-to-eat 브랜드 아이덴티티. 아래 --green-* 는 하위호환 alias 로 유지(점진 마이그레이션). */
+  --color-brand: #006241;        /* 깊은 잎녹색 — 제목·점수·강조 */
+  --color-brand-accent: #00754a; /* 생생한 녹색 — 주 CTA·링크·칩 활성 */
+  --color-brand-deep: #1e3932;   /* 짙은 녹색 — 피처 밴드·footer·다크 배경 */
+  --color-brand-tint: #d4e9e2;   /* 연한 녹색 — 폼 valid·칩 2순위 */
+  --color-accent-warm: var(--clay);  /* 식욕 포인트(테라코타 --clay #cc785c 재사용) — 관리 콘솔 한정 절제 사용 */
+
+  /* ───── Color: Greens (4-tier) — 하위호환 alias ───── */
+  --green-starbucks: var(--color-brand);
+  --green-accent: var(--color-brand-accent);
+  --green-house: var(--color-brand-deep);
   --green-uplift: #2b5148;
-  --green-light: #d4e9e2;
+  --green-light: var(--color-brand-tint);
 
   /* ───── Color: Category (tone-on-tone, low-saturation) ───── */
   --cat-han-bg: #ecdcd3;   /* 한식 — 적갈/clay */
@@ -148,6 +156,10 @@
   --column-md: 500px;
   --column-lg: 720px;
   --column-xl: 1080px;
+
+  /* ───── Admin console layout ───── */
+  --admin-sidebar-w: 22rem;
+  --admin-master-w: 36rem;
 }
 
 @media (min-width: 768px) {

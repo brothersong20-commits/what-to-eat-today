@@ -83,6 +83,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 | `share.js` | `buildShareUrl` `shareControlsHtml` `bindShareControls` `openQrModal` | 링크 복사·QR |
 | `spin-wheel.js` | `spinWheelButtonHtml()` `bindSpinWheel()` | 식당 돌림판 |
 | `photo-marquee.js` | `photoMarqueeHtml(images)` | 홈 히어로 배경 무한 사진 marquee(장식 텍스처) |
+| `confirm-modal.js` | `openConfirm(opts)` | 위험 작업 확인 모달(Promise<boolean>) |
 
 ## 비명확한 핵심 규칙
 
@@ -112,7 +113,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 - **`VITE_` 환경변수는 클라이언트 번들에 노출된다**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`(=publishable/anon key)는 공개돼도 되는 값이다. **`service_role` 키는 절대 클라이언트에 두지 말 것** — RLS 우회 가능하다. 구 `VITE_ADMIN_KEY`는 OAuth 전환으로 제거됐다 — 관리자 판정은 위 "관리자 인증" 항목 참조(번들이 아니라 서버에서 JWT 이메일로 판정해 비밀이 들어가지 않는다).
 
-- **디자인 토큰 파이프라인**: `DESIGN.md`(Starbucks 영감 명세) → `src/styles/tokens.css`(CSS 변수) → `src/styles/global.css`(토큰만 참조). 새 색/간격이 필요하면 먼저 `tokens.css`에 토큰을 추가하고 그 변수를 사용해야 한다. 루트가 `62.5%`라는 전제 위에서 `1rem = 10px`로 스페이싱 스케일이 설계돼 있다.
+- **디자인 토큰 파이프라인**: `DESIGN.md`(what-to-eat 브랜드 기준 + 영감 분석) → `src/styles/tokens.css`(CSS 변수) → `src/styles/global.css`(토큰만 참조). 새 색/간격이 필요하면 먼저 `tokens.css`에 토큰을 추가하고 그 변수를 사용해야 한다. 루트가 `62.5%`라는 전제 위에서 `1rem = 10px`로 스페이싱 스케일이 설계돼 있다. **브랜드 색은 의미 토큰 `--color-brand`/`--color-brand-accent`/`--color-brand-deep`/`--color-brand-tint`(Leaf Green)과 식욕 포인트 `--color-accent-warm`(관리 콘솔 한정)이 정본이며, 기존 `--green-starbucks`/`--green-accent`/`--green-house`/`--green-light`는 이를 가리키는 하위호환 alias다(global.css의 기존 참조는 무수정 유지). 새 코드는 `--color-*`를 쓴다.**
 
 - **`CATEGORIES`는 안내용 하드코딩**: `src/lib/config.js`의 배열은 참고용이고, 실제 필터 칩은 DB의 카테고리 값에서 동적으로 추출된다(`home.js`, `vote.js`). 카테고리 추가 시 DB만 고쳐도 동작하지만 둘 다 맞춰두는 게 권장된다.
 

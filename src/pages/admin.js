@@ -13,6 +13,7 @@ import { escapeHtml, safeUrl } from '../lib/escape.js';
 import { onRouteLeave } from '../lib/router.js';
 import { uniq } from '../lib/facets.js';
 import { signInWithGoogle, signOut, getCurrentUser, amIAdmin } from '../lib/supabase.js';
+import { openConfirm } from '../components/confirm-modal.js';
 
 // 현재 로그인한 관리자 이메일 — 셸 상단 표시용. bootstrapAuth에서 설정.
 let currentAdminEmail = '';
@@ -25,6 +26,20 @@ function runAllCleanups() {
     try { fn(); } catch { /* noop */ }
   }
   cleanups.clear();
+}
+
+// 비동기 쓰기 중 버튼 잠금+라벨 교체, 끝나면 복원. 성공 후 rerender로 노드가 사라지면 복원은 isConnected로 skip.
+async function withBusy(btn, busyText, fn) {
+  if (!btn) return fn();
+  const prev = btn.innerHTML;
+  const wasDisabled = btn.disabled;
+  btn.disabled = true;
+  btn.innerHTML = busyText;
+  try {
+    return await fn();
+  } finally {
+    if (btn.isConnected) { btn.disabled = wasDisabled; btn.innerHTML = prev; }
+  }
 }
 
 export function renderAdmin(app) {
@@ -42,6 +57,11 @@ export function renderAdmin(app) {
   `;
 
   const root = app.querySelector('#admin-root');
+
+  // admin 콘솔은 공개 페이지의 1080px 읽기 폭 캡에서 벗어나 작업공간으로 넓게 쓴다.
+  // 라우트 이탈 시 클래스를 제거해 다른 페이지가 풀폭으로 새지 않게 한다.
+  app.classList.add('app--admin');
+  onRouteLeave(() => app.classList.remove('app--admin'));
 
   // 다른 라우트로 이동하면 모든 폴링/타이머/구독 회수 (라우터 중앙 정리 훅)
   onRouteLeave(runAllCleanups);
@@ -132,18 +152,20 @@ function renderNotAuthorized(root, user) {
 function renderShell(root, { initialTab = 'active', autoOpenPollId = null } = {}) {
   runAllCleanups();
   root.innerHTML = `
-    <div class="admin-tabs" role="tablist">
-      <button type="button" class="admin-tab" data-tab="active" role="tab">진행중인 투표</button>
-      <button type="button" class="admin-tab" data-tab="new" role="tab">새 투표 만들기</button>
-      <button type="button" class="admin-tab" data-tab="restaurants" role="tab">식당 관리</button>
-      <button type="button" class="admin-tab" data-tab="cafes" role="tab">카페 관리</button>
-      <button type="button" class="admin-tab" data-tab="options" role="tab">분류 관리</button>
-      <div class="admin-tabs-right">
-        ${currentAdminEmail ? `<span class="admin-user" title="로그인 계정"><span class="admin-user-dot" aria-hidden="true"></span>${escapeHtml(currentAdminEmail)}</span>` : ''}
-        <button type="button" class="btn btn-ghost admin-logout" id="admin-logout">로그아웃</button>
-      </div>
+    <div class="admin-shell">
+      <nav class="admin-sidebar" role="tablist">
+        <button type="button" class="admin-tab" data-tab="active" role="tab">진행중인 투표</button>
+        <button type="button" class="admin-tab" data-tab="new" role="tab">새 투표 만들기</button>
+        <button type="button" class="admin-tab" data-tab="restaurants" role="tab">식당 관리</button>
+        <button type="button" class="admin-tab" data-tab="cafes" role="tab">카페 관리</button>
+        <button type="button" class="admin-tab" data-tab="options" role="tab">분류 관리</button>
+        <div class="admin-sidebar-footer">
+          ${currentAdminEmail ? `<span class="admin-user" title="로그인 계정"><span class="admin-user-dot" aria-hidden="true"></span>${escapeHtml(currentAdminEmail)}</span>` : ''}
+          <button type="button" class="btn btn-ghost admin-logout" id="admin-logout">로그아웃</button>
+        </div>
+      </nav>
+      <div class="admin-main" id="admin-tab-body"></div>
     </div>
-    <div id="admin-tab-body"></div>
   `;
 
   const body = root.querySelector('#admin-tab-body');
@@ -389,10 +411,12 @@ async function renderDetail(mount, shellRoot, pollId, allPolls, restaurants) {
     renderActiveList(mount, shellRoot);
   });
 
-  mount.querySelector('#detail-delete').addEventListener('click', async () => {
-    if (!confirm(`정말 "${poll.title}" 투표를 삭제할까요?\n이 투표에 등록된 모든 표가 함께 삭제되며 되돌릴 수 없습니다.`)) return;
+  mount.querySelector('#detail-delete').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const ok = await openConfirm({ title: '투표 삭제', message: `정말 "${poll.title}" 투표를 삭제할까요?\n이 투표에 등록된 모든 표가 함께 삭제되며 되돌릴 수 없습니다.`, confirmLabel: '삭제' });
+    if (!ok) return;
     try {
-      await deletePoll({pollId: poll.id });
+      await withBusy(btn, '삭제 중…', () => deletePoll({ pollId: poll.id }));
       const idx = allPolls.findIndex((p) => p.id === poll.id);
       if (idx >= 0) allPolls.splice(idx, 1);
       showToast('투표가 삭제되었습니다');
@@ -1080,7 +1104,22 @@ const ENTITY_KINDS = {
 const renderRestaurantsTab = (mount, shellRoot, opts) => renderEntityTab(mount, shellRoot, 'restaurant', opts);
 const renderCafesTab = (mount, shellRoot, opts) => renderEntityTab(mount, shellRoot, 'cafe', opts);
 
-async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } = {}) {
+function filterItems(items, q) {
+  const s = (q || '').trim().toLowerCase();
+  if (!s) return items;
+  return items.filter((r) =>
+    [r.name, r.id, r.category, r.area].some((v) => String(v || '').toLowerCase().includes(s)));
+}
+
+function entityRowsHtml(items, editingId, kindNoun, isFiltered) {
+  const html = items.map((r) => restaurantRowHtml(r, r.id === editingId)).join('');
+  if (html) return html;
+  return isFiltered
+    ? `<div class="state"><p>검색 결과가 없습니다.</p></div>`
+    : `<div class="state"><p>등록된 ${kindNoun}이 없습니다.</p></div>`;
+}
+
+async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null, query = '' } = {}) {
   const kind = ENTITY_KINDS[kindKey];
   const rerender = (o) => renderEntityTab(mount, shellRoot, kindKey, o);
 
@@ -1116,34 +1155,41 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
         <span class="fs-small text-soft">총 ${items.length}개 (활성 ${items.filter((r) => r.active).length}${items.filter((r) => r.source === 'ai_draft' && !r.active).length ? ` · AI초안 ${items.filter((r) => r.source === 'ai_draft' && !r.active).length}` : ''})</span>
       </div>
 
-      <div id="rest-list" class="rest-list">
-        ${items.map((r) => restaurantRowHtml(r, r.id === editingId)).join('') || `<div class="state"><p>등록된 ${kind.noun}이 없습니다.</p></div>`}
-      </div>
+      <div class="entity-split">
+        <div class="entity-master">
+          <input type="search" class="entity-search input" id="entity-search" placeholder="이름·ID·카테고리·지역 검색" value="${escapeHtml(query)}" />
+          <div id="rest-list" class="rest-list">
+            ${entityRowsHtml(filterItems(items, query), editingId, kind.noun, !!(query || '').trim())}
+          </div>
+        </div>
 
-      <section class="card stack-4">
-        <div class="stack-3">
-          <h3>${editing ? `${kind.noun} 수정 — ${escapeHtml(editing.name)}` : `새 ${kind.noun} 추가`}</h3>
-          ${editing ? '' : `<p class="text-soft fs-small">ID는 자동 부여됩니다. 이름은 필수.</p>`}
-        </div>
-        ${editing && editing.source === 'ai_draft' ? `
-          <div class="rf-draft-banner">
-            <strong>AI 초안입니다 — 검토 후 활성화하세요.</strong>
-            <p class="fs-small">web search로 자동 작성된 내용입니다. 가격·메뉴·영업시간을 확인하고, 이미지(썸네일·메뉴판)를 추가하세요. ‘검토 완료 · 활성화’를 누르면 공개되고 초안 표시가 사라집니다.</p>
-            ${editing.sourceNote ? `<p class="fs-small text-soft">출처/메모: ${escapeHtml(editing.sourceNote)}</p>` : ''}
-          </div>
-        ` : ''}
-        ${restaurantFormHtml(editing, { ...formOpts, nextId: kind.nextId(items), showGroupDining: kind.showGroupDining })}
-        <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
-          <div class="row-2">
-            ${editing ? `
-              <button type="button" class="btn btn-ghost" id="rf-cancel">취소</button>
-              <button type="button" class="btn btn-outline" id="rf-toggle-active">${editing.active ? '비활성화' : (editing.source === 'ai_draft' ? '검토 완료 · 활성화' : '활성화')}</button>
-              <button type="button" class="btn btn-ghost rf-danger" id="rf-delete">완전 삭제</button>
+        <div class="entity-detail">
+          <section class="card stack-4">
+            <div class="stack-3">
+              <h3>${editing ? `${kind.noun} 수정 — ${escapeHtml(editing.name)}` : `새 ${kind.noun} 추가`}</h3>
+              ${editing ? '' : `<p class="text-soft fs-small">ID는 자동 부여됩니다. 이름은 필수.</p>`}
+            </div>
+            ${editing && editing.source === 'ai_draft' ? `
+              <div class="rf-draft-banner">
+                <strong>AI 초안입니다 — 검토 후 활성화하세요.</strong>
+                <p class="fs-small">web search로 자동 작성된 내용입니다. 가격·메뉴·영업시간을 확인하고, 이미지(썸네일·메뉴판)를 추가하세요. ‘검토 완료 · 활성화’를 누르면 공개되고 초안 표시가 사라집니다.</p>
+                ${editing.sourceNote ? `<p class="fs-small text-soft">출처/메모: ${escapeHtml(editing.sourceNote)}</p>` : ''}
+              </div>
             ` : ''}
-          </div>
-          <button type="button" class="btn btn-primary" id="rf-save">${editing ? '수정 저장' : `${kind.noun} 추가`}</button>
+            ${restaurantFormHtml(editing, { ...formOpts, nextId: kind.nextId(items), showGroupDining: kind.showGroupDining })}
+            <div class="row-2" style="justify-content: space-between; flex-wrap: wrap;">
+              <div class="row-2">
+                ${editing ? `
+                  <button type="button" class="btn btn-ghost" id="rf-cancel">취소</button>
+                  <button type="button" class="btn btn-outline" id="rf-toggle-active">${editing.active ? '비활성화' : (editing.source === 'ai_draft' ? '검토 완료 · 활성화' : '활성화')}</button>
+                  <button type="button" class="btn btn-ghost rf-danger" id="rf-delete">완전 삭제</button>
+                ` : ''}
+              </div>
+              <button type="button" class="btn btn-primary" id="rf-save">${editing ? '수정 저장' : `${kind.noun} 추가`}</button>
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
     </section>
   `;
 
@@ -1152,7 +1198,15 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
     const row = e.target.closest('[data-restaurant-id]');
     if (!row) return;
     const rid = row.dataset.restaurantId;
-    rerender({ editingId: editingId === rid ? null : rid });
+    const currentQuery = mount.querySelector('#entity-search')?.value ?? query;
+    rerender({ editingId: editingId === rid ? null : rid, query: currentQuery });
+  });
+
+  // 검색 input — #rest-list innerHTML만 부분 갱신(포커스 유지)
+  mount.querySelector('#entity-search')?.addEventListener('input', (e) => {
+    const q = e.target.value;
+    const filtered = filterItems(items, q);
+    mount.querySelector('#rest-list').innerHTML = entityRowsHtml(filtered, editingId, kind.noun, !!(q || '').trim());
   });
 
   // 썸네일 깨짐 감지 — 로드 실패 행에 '⚠ 사진 깨짐' 표시(즉시) + 깨진 개수 요약 알림(관리자가 URL 갱신하도록).
@@ -1184,22 +1238,25 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
   if (editing) {
     // 행 클릭/저장 후 편집 폼이 보이도록 스크롤(목록이 길 때 폼을 찾아 내려가는 마찰 제거).
     requestAnimationFrame(() => mount.querySelector('#rest-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-    mount.querySelector('#rf-cancel').addEventListener('click', () => rerender());
-    mount.querySelector('#rf-toggle-active').addEventListener('click', async () => {
+    const getQuery = () => mount.querySelector('#entity-search')?.value ?? query;
+    mount.querySelector('#rf-cancel').addEventListener('click', () => rerender({ query: getQuery() }));
+    mount.querySelector('#rf-toggle-active').addEventListener('click', async (e) => {
       try {
-        await kind.setActive({id: editing.id, active: !editing.active });
+        await withBusy(e.currentTarget, '처리 중…', () => kind.setActive({ id: editing.id, active: !editing.active }));
         showToast(editing.active ? '비활성화되었습니다' : '활성화되었습니다');
-        rerender({ editingId: editing.id });
+        rerender({ editingId: editing.id, query: getQuery() });
       } catch (err) {
         handleAdminError(err, mount, shellRoot);
       }
     });
-    mount.querySelector('#rf-delete').addEventListener('click', async () => {
-      if (!confirm(`정말 "${editing.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.${kind.deleteConfirmExtra}`)) return;
+    mount.querySelector('#rf-delete').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const ok = await openConfirm({ title: `${kind.noun} 삭제`, message: `정말 "${editing.name}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.${kind.deleteConfirmExtra}`, confirmLabel: '삭제' });
+      if (!ok) return;
       try {
-        await kind.remove({id: editing.id });
+        await withBusy(btn, '삭제 중…', () => kind.remove({ id: editing.id }));
         showToast('삭제되었습니다');
-        rerender();
+        rerender({ query: getQuery() });
       } catch (err) {
         handleAdminError(err, mount, shellRoot);
       }
@@ -1216,6 +1273,17 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
   mount.querySelector('#rf-menu-rows')?.addEventListener('click', (e) => {
     const del = e.target.closest('.me-del');
     if (del) del.closest('.menu-edit-row').remove();
+  });
+  // 가격칸: 입력 중엔 숫자·콤마만 허용(재포맷 없음 → 커서 점프 방지), blur 시 천단위 콤마 포맷.
+  mount.querySelector('#rf-menu-rows')?.addEventListener('input', (e) => {
+    const el = e.target.closest('.me-price');
+    if (el) el.value = el.value.replace(/[^\d,]/g, '');
+  });
+  mount.querySelector('#rf-menu-rows')?.addEventListener('focusout', (e) => {
+    const el = e.target.closest('.me-price');
+    if (!el) return;
+    const digits = el.value.replace(/[^\d]/g, '');
+    el.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
   });
 
   // 썸네일 URL → 미리보기 라이브 갱신
@@ -1301,10 +1369,10 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
     const walkingRaw = (mount.querySelector('#rf-walking').value || '').trim();
     const walkingMinutes = walkingRaw === '' ? null : Number(walkingRaw);
     const menuRows = [...mount.querySelectorAll('#rf-menu-rows .menu-edit-row')].map((row) => {
-      const priceRaw = (row.querySelector('.me-price').value || '').trim();
+      const priceDigits = (row.querySelector('.me-price').value || '').replace(/[^\d]/g, '');
       return {
         name: row.querySelector('.me-name').value,
-        price: priceRaw === '' ? null : Number(priceRaw),
+        price: priceDigits === '' ? null : Number(priceDigits),
         representative: row.querySelector('.me-rep').checked
       };
     });
@@ -1346,14 +1414,15 @@ async function renderEntityTab(mount, shellRoot, kindKey, { editingId = null } =
     saveBtn.disabled = true;
     saveBtn.textContent = '저장 중...';
     try {
+      const savedQuery = mount.querySelector('#entity-search')?.value ?? query;
       if (editing) {
         await kind.save({id: editing.id, patch: fields });
         showToast('수정되었습니다');
-        rerender({ editingId: editing.id });
+        rerender({ editingId: editing.id, query: savedQuery });
       } else {
         await kind.create({id, ...fields });
         showToast(`${kind.noun}이 추가되었습니다`);
-        rerender({ editingId: id });
+        rerender({ editingId: id, query: savedQuery });
       }
       // 성공 시 rerender가 DOM을 교체하므로 버튼 복구 불필요.
     } catch (err) {
@@ -1447,7 +1516,7 @@ async function renderOptionsTab(mount, shellRoot) {
           return;
         }
         try {
-          await updateOption({kind, oldValue: value, newValue: next });
+          await withBusy(e.target.closest('.opt-save'), '저장 중…', () => updateOption({ kind, oldValue: value, newValue: next }));
           showToast('변경되었습니다');
           reload();
         } catch (err) {
@@ -1455,7 +1524,7 @@ async function renderOptionsTab(mount, shellRoot) {
         }
       } else if (e.target.closest('.opt-delete')) {
         try {
-          await deleteOption({kind, value });
+          await withBusy(e.target.closest('.opt-delete'), '삭제 중…', () => deleteOption({ kind, value }));
           showToast('삭제되었습니다');
           reload();
         } catch (err) {
@@ -1510,18 +1579,29 @@ function optionRowHtml(kind, value) {
 }
 
 function restaurantRowHtml(r, isEditing) {
+  const naver = safeUrl(r.naverUrl);
   return `
-    <div class="rest-row ${isEditing ? 'is-editing' : ''} ${r.active ? '' : 'is-inactive'}" data-restaurant-id="${escapeHtml(r.id)}">
-      ${r.imageUrl ? `<img class="rest-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ''}
-      <span class="rest-id">${escapeHtml(r.id)}</span>
-      ${categoryBadgeHtml(r.category)}
-      ${areaBadgeHtml(r.area)}
-      ${r.isGroupDining ? verifiedSealHtml({ size: '1.6rem' }) : ''}
-      <span class="rest-name">${escapeHtml(r.name)}</span>
-      ${safeUrl(r.naverUrl) ? `<a class="rest-naver" href="${escapeHtml(safeUrl(r.naverUrl))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📍 네이버</a>` : ''}
-      ${r.source === 'ai_draft' && !r.active ? `<span class="rest-flag is-draft" title="AI가 web search로 만든 초안 — 검토 후 활성화하세요">AI 초안 · 검토 필요</span>` : ''}
-      ${r.imageUrl ? `<span class="rest-flag is-broken" title="썸네일 이미지를 불러올 수 없습니다 — 이미지 URL을 갱신하세요" hidden>⚠ 사진 깨짐</span>` : ''}
-      <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>
+    <div class="rest-row ${isEditing ? 'is-editing' : ''} ${r.active ? '' : 'is-inactive'}" data-restaurant-id="${escapeHtml(r.id)}"${isEditing ? ' aria-current="true"' : ''}>
+      ${r.imageUrl
+        ? `<img class="rest-thumb" src="${escapeHtml(r.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
+        : `<span class="rest-thumb rest-thumb--empty" aria-hidden="true"></span>`}
+      <div class="rest-main">
+        <div class="rest-primary">
+          <span class="rest-name">${escapeHtml(r.name)}</span>
+          ${r.isGroupDining ? verifiedSealHtml({ size: '1.5rem' }) : ''}
+        </div>
+        <div class="rest-meta">
+          <span class="rest-id">${escapeHtml(r.id)}</span>
+          ${categoryBadgeHtml(r.category)}
+          ${areaBadgeHtml(r.area)}
+          ${r.source === 'ai_draft' && !r.active ? `<span class="rest-flag is-draft" title="AI가 web search로 만든 초안 — 검토 후 활성화하세요">AI 초안</span>` : ''}
+          ${r.imageUrl ? `<span class="rest-flag is-broken" title="썸네일 이미지를 불러올 수 없습니다 — 이미지 URL을 갱신하세요" hidden>⚠ 사진 깨짐</span>` : ''}
+        </div>
+      </div>
+      <div class="rest-aside">
+        <span class="rest-flag ${r.active ? 'is-active' : 'is-inactive'}">${r.active ? '활성' : '비활성'}</span>
+        ${naver ? `<a class="rest-naver" href="${escapeHtml(naver)}" target="_blank" rel="noopener" title="네이버 지도" aria-label="네이버 지도에서 보기" onclick="event.stopPropagation()">📍</a>` : ''}
+      </div>
     </div>
   `;
 }
@@ -1681,7 +1761,7 @@ function menuRowHtml(m) {
         <input type="checkbox" class="me-rep" ${v.representative ? 'checked' : ''} aria-label="대표 메뉴" />
       </label>
       <input type="text" class="input me-name" value="${escapeHtml(v.name || '')}" placeholder="메뉴 이름" />
-      <input type="text" inputmode="numeric" class="input me-price" value="${v.price != null ? v.price : ''}" placeholder="가격" />
+      <input type="text" inputmode="numeric" class="input me-price" value="${v.price != null ? Number(v.price).toLocaleString('ko-KR') : ''}" placeholder="가격" />
       <button type="button" class="btn btn-ghost rf-danger me-del" aria-label="행 삭제">✕</button>
     </div>
   `;

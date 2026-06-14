@@ -1,9 +1,10 @@
 {
   "name": "what-to-eat-today",
   "private": true,
-  "version": "4.7.0",
+  "version": "4.8.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/free-port.mjs 5273",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"

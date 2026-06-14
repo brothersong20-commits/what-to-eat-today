@@ -1,6 +1,14 @@
-# Design System Inspired by Starbucks
+# what-to-eat 디자인 시스템
 
-## 1. Visual Theme & Atmosphere
+> **브랜드 아이덴티티 — Leaf Green + 따뜻한 식욕 포인트.** what-to-eat(회식·점심 식당 투표 앱)의 시각 기준이다. 깊은 잎녹색(`--color-brand` `#006241`) 계열을 신뢰감 있는 기본 브랜드로, 테라코타 계열(`--color-accent-warm` = `--clay` `#cc785c`)을 식욕을 돋우는 절제된 포인트로 쓴다. 토큰의 단일 진실 원천은 `src/styles/tokens.css`이며, 의미 토큰 `--color-brand` / `--color-brand-accent` / `--color-brand-deep` / `--color-brand-tint` 이 우선한다. 기존 `--green-*` 는 이들을 가리키는 하위호환 alias 다.
+>
+> **톤 분리.** 공개 페이지(home/vote/result)는 따뜻하고 식욕을 돋우는 리테일 톤. 관리 콘솔(admin)은 조용하고 고밀도인 백오피스 톤 — 넓은 작업폭(`#app.app--admin` 캡 해제), 마스터-디테일, 따뜻한 포인트(`--color-accent-warm`)는 활성 표시 등에 소량만.
+>
+> **타이포그래피(실제 구현).** 본문·제목 모두 **Pretendard**(한글 최적, jsDelivr CDN). 아래 본문에 등장하는 SoDoSans/Lander Tall/Kalam 등은 영감 출처의 폰트이며 본 프로젝트엔 적용되지 않는다.
+>
+> 아래 1절 이후는 이 시스템의 **영감 출발점이 된 리테일 디자인 분석**이다. 디자인 DNA(따뜻한 크림 캔버스, 4단계 녹색의 표면별 역할, 50px 풀필 버튼, `scale(0.95)` 프레스, 속삭이는 그림자)는 계승하되, 브랜드 명칭·소유는 위 what-to-eat 기준을 따른다.
+
+## 1. Visual Theme & Atmosphere (영감 분석)
 
 Starbucks' design system is a **warm, confident retail flagship** wearing the green of their storefront apron across every surface. The canvas alternates between a neutral-warm cream (`#f2f0eb`) and a ceramic off-white (`#edebe9`) — colors that reference actual store materials: the paper napkins, the café walls, the wood finishes — while the signature **Starbucks Green** (`#006241`) anchors the brand moment on hero bands, CTAs, and the Rewards experience. The greens come in four calibrated shades (Starbucks, Accent, House, Uplift) each mapped to a specific surface role, and gold (`#cba258`) appears only around Rewards-status ceremony — not as a general accent.
 
@@ -540,6 +548,8 @@ Inferred from component width tokens and progressive nav heights:
 - Rewards app-in-hand photography scales proportionally; never stretches
 
 ## 9. Agent Prompt Guide
+
+> ⚠ **주의 — 아래 색 명칭·예제 프롬프트는 영감 출처(리테일) 재현용이다.** what-to-eat 작업에 그대로 복사하지 말 것. 색은 의미 토큰으로 치환해 읽어라: "Starbucks Green" → `--color-brand`, "Green Accent" → `--color-brand-accent`, "House Green" → `--color-brand-deep`, "Green Light" → `--color-brand-tint`. 폰트는 Pretendard. 식욕 포인트가 필요하면 `--color-accent-warm`(관리 콘솔 한정). "Rewards/Gift Card/Venti/Refreshers" 류 예제는 이 앱과 무관한 출처 데모다.
 
 ### Quick Color Reference
 
