@@ -141,8 +141,9 @@ textarea {
   color: var(--green-accent);
 }
 .site-version {
-  font-size: 1.1rem;
-  color: var(--text-mute);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-soft);
   letter-spacing: 0;
   margin-top: var(--space-1);
 }
@@ -152,6 +153,152 @@ textarea {
   }
   .site-header--home .site-subtitle {
     font-size: 1.4rem;
+  }
+}
+
+/* ───── Home hero — 사진 marquee 배경 텍스처 ───── */
+.home-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--radius-card);
+  margin-bottom: var(--space-4);
+  /* marquee 가 흐름(flow)에서 높이를 정한다 → 행이 잘리지 않고 사진이 온전히 보임.
+     여기선 위·아래 크림 여백만 준다. */
+  padding-block: var(--space-3);
+  /* 히어로 타이틀은 한글 — keep-all 로 어색한 음절 분리 방지(전역 아님, 히어로 한정) */
+  word-break: keep-all;
+}
+/* 타이틀 블록은 marquee 위에 가운데 오버레이(흐름에서 빠져 높이에 영향 안 줌) */
+.home-hero .site-header-center {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  justify-content: center;
+  padding-inline: var(--space-4);
+}
+.home-hero .site-admin-link {
+  z-index: 3;
+  right: var(--space-4);
+}
+/* 크림 스크림 — 중앙 텍스트 뒤만 보호(가장자리는 투명 → 사진이 비침) */
+.home-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: radial-gradient(
+    closest-side at 50% 50%,
+    rgba(var(--canvas-rgb), 0.88) 0%,
+    rgba(var(--canvas-rgb), 0.55) 58%,
+    rgba(var(--canvas-rgb), 0) 100%
+  );
+  pointer-events: none;
+}
+
+.photo-marquee {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  opacity: var(--marquee-opacity);
+  pointer-events: none;
+}
+.marquee-row {
+  overflow: hidden;
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 60s linear infinite;
+  will-change: transform;
+}
+/* 2행은 반대 방향 + 다른 속도 — 정적으로 보이지 않게 */
+.marquee-row--2 .marquee-track {
+  animation-duration: 78s;
+  animation-direction: reverse;
+}
+/* 동일 group 2벌이라 group 자체 트레일링 간격(padding-right)으로 균일 간격 유지 →
+   translateX(-50%) 가 정확히 한 group 폭 = 끊김 없음 */
+.marquee-group {
+  display: flex;
+  gap: var(--space-3);
+  padding-right: var(--space-3);
+}
+.marquee-item {
+  flex: 0 0 22rem;
+  width: 22rem;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  object-fit: cover;
+  border-radius: var(--radius-card);
+  display: block;
+}
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (max-width: 480px) {
+  .marquee-item {
+    flex-basis: 16rem;
+    width: 16rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* 히어로 콘텐츠 진입 — 첫 화면 한정(목록 스태거는 의도적으로 미적용) */
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.home-hero .site-header-center {
+  animation: hero-rise 0.6s var(--ease) both;
+}
+
+/* 섹션 헤더 — 클레이 좌측 룰(에디토리얼). 이 클래스를 붙인 곳에만 적용 */
+.section-title {
+  position: relative;
+  padding-left: var(--space-3);
+}
+.section-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.18em;
+  bottom: 0.18em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--clay);
+}
+
+/* 카드 호버 리프트 — 둘러보기 그리드 한정(투표 선택·관리자 리스트 카드는 제외) */
+.restaurant-grid .restaurant-card {
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+@media (hover: hover) {
+  .restaurant-grid .restaurant-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-float);
+  }
+}
+
+/* 공통 포커스 링 — 요소별 전용 규칙(.rc-like 등)이 있으면 그쪽이 우선 */
+:focus-visible {
+  outline: 2px solid var(--green-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero .site-header-center {
+    animation: none;
+  }
+  .restaurant-card {
+    transition: none;
   }
 }
 
@@ -1636,7 +1783,7 @@ textarea {
   display: flex;
   gap: var(--space-2);
   padding: var(--space-2);
-  background: rgba(242, 240, 235, 0.92);
+  background: rgba(var(--canvas-rgb), 0.92);
   backdrop-filter: blur(8px);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-float);

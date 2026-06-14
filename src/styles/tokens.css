@@ -37,9 +37,10 @@
   --naver-green-strong: #02a94c;
 
   /* ───── Color: Surface ───── */
-  --canvas: #f2f0eb;         /* Neutral Warm — page canvas */
-  --canvas-2: #edebe9;       /* Ceramic — section separators */
-  --surface-card: #ffffff;
+  --canvas: #faf9f5;         /* Warm Cream — page canvas (editorp 영감) */
+  --canvas-rgb: 250, 249, 245; /* canvas 의 rgb — 반투명 배경(submit-bar 등)용 */
+  --canvas-2: #f5f0e8;       /* Soft Cream — section separators */
+  --surface-card: #ffffff;   /* 카드 흰색 유지 — 음식 사진이 가장 또렷 */
   --surface-cool: #f9f9f9;
 
   /* ───── Color: Text ───── */
@@ -62,11 +63,15 @@
   --badge-danger-fg: var(--danger);
 
   /* ───── Border ───── */
-  --border-soft: #e7e7e7;
+  --border-soft: #e6dfd8;    /* Warm hairline — 크림 캔버스와 조화 */
   --border-input: #d6dbde;
 
+  /* ───── Color: Clay accent (editorp 영감 — 보조 강조색, 그린 브랜드는 유지) ───── */
+  --clay: #cc785c;
+  --clay-active: #a9583e;
+
   /* ───── Typography ───── */
-  --font-sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --letter-tight: -0.01em;
   --line-normal: 1.5;
   --line-compact: 1.2;
@@ -98,8 +103,13 @@
 
   /* ───── Motion ───── */
   --duration: 0.2s;
+  --transition-fast: 0.15s ease;
   --ease: ease;
   --press-scale: 0.95;
+
+  /* ───── Home hero marquee (배경 사진 텍스처) ───── */
+  /* 중앙 텍스트 뒤는 scrim 으로 보호하고, 가장자리에서 이 불투명도로 사진이 비친다. */
+  --marquee-opacity: 0.26;
 
   /* ───── Flip clock (split-flap scoreboard) ───── */
   /* 일·시·분·초 전 칸 차콜 단색 통일 — 홈 활성 폴 밴드·투표 헤더(둘 다 House Green) 위에서 고대비 */

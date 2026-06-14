@@ -82,6 +82,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 | `filter-bar.js` | `filterBarHtml()` `bindFilterBar()` `applyFilter()` | 카테고리/지역/검색 필터 |
 | `share.js` | `buildShareUrl` `shareControlsHtml` `bindShareControls` `openQrModal` | 링크 복사·QR |
 | `spin-wheel.js` | `spinWheelButtonHtml()` `bindSpinWheel()` | 식당 돌림판 |
+| `photo-marquee.js` | `photoMarqueeHtml(images)` | 홈 히어로 배경 무한 사진 marquee(장식 텍스처) |
 
 ## 비명확한 핵심 규칙
 

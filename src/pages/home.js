@@ -10,6 +10,7 @@ import { restaurantCardHtml } from '../components/restaurant-card.js';
 import { categoryBadgeHtml } from '../components/category-badge.js';
 import { filterBarHtml, bindFilterBar, applyFilter } from '../components/filter-bar.js';
 import { flipClockHtml, updateFlipClock } from '../components/flip-clock.js';
+import { photoMarqueeHtml } from '../components/photo-marquee.js';
 import { shuffle } from '../lib/shuffle.js';
 import { escapeHtml } from '../lib/escape.js';
 import { uniq } from '../lib/facets.js';
@@ -20,7 +21,8 @@ import { onRouteLeave } from '../lib/router.js';
 
 export async function renderHome(app) {
   app.innerHTML = `
-    <header class="site-header site-header--home">
+    <header class="site-header site-header--home home-hero">
+      <div id="hero-marquee-mount"></div>
       <a href="#/admin" class="site-admin-link">관리자</a>
       <div class="site-header-center">
         <h1 class="site-title">오늘뭐먹지?</h1>
@@ -31,7 +33,7 @@ export async function renderHome(app) {
 
     <section class="card stack-3" id="active-polls-section" hidden style="margin-bottom: var(--space-3);">
       <div>
-        <h2>투표 중인 회식</h2>
+        <h2 class="section-title">투표 중인 회식</h2>
         <p class="text-soft fs-small">진행 중인 회식 투표에 참여해보세요.</p>
       </div>
       <div id="active-polls-list" class="poll-list"></div>
@@ -88,6 +90,20 @@ export async function renderHome(app) {
 
   const restaurantsPromise = loadRestaurants();
   const cafesPromise = loadCafes();
+
+  // 히어로 배경 사진 marquee — 이미 로드 중인 식당·카페 데이터의 imageUrl 을 재사용
+  // (별도 데이터 fetch 없음. 단 <img> 자체의 네트워크 로드는 발생). 배경 장식이라
+  // 데이터가 늦게 도착해도 무방하므로 비동기로 채운다.
+  (async () => {
+    const mount = app.querySelector('#hero-marquee-mount');
+    if (!mount) return;
+    const [rs, cs] = await Promise.allSettled([restaurantsPromise, cafesPromise]);
+    const imgs = [];
+    if (rs.status === 'fulfilled') imgs.push(...rs.value.map((r) => r.imageUrl));
+    if (cs.status === 'fulfilled') imgs.push(...cs.value.map((c) => c.imageUrl));
+    const html = photoMarqueeHtml(shuffle(imgs.filter(Boolean)));
+    if (html) mount.outerHTML = html;
+  })();
 
   // ── 좋아요 상태 (식당·카페 둘러보기 공유) ────────────────────
   // 출처는 likeCount/mine. 카드는 매 렌더 시 여기서 다시 그려지므로
