@@ -2,11 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 작업 원칙 (코드를 쓰기 전에)
+
+이 저장소에서 변경을 가할 때의 기본 자세. 아키텍처·규칙은 아래 섹션에, 여기는 "어떻게 일하느냐"만 둔다.
+
+1. **가정을 표면화한다** — 해석이 갈리면 조용히 하나 고르지 말고 선택지를 제시하거나 묻는다. 더 단순한 길이 보이면 그대로 진행하지 말고 말한다(push back). 추정한 사실은 코드로 확인하고 바꾼다.
+2. **단순함 우선** — 요청한 것만. 요청 밖 기능·추측성 추상화·"나중을 위한" 설정 가능성을 넣지 않는다. (구체적 재사용 규칙은 "코드 재사용 원칙" 섹션 참조 — 새 바퀴 금지.)
+3. **수술적 변경** — 요청과 무관한 인접 코드·포맷·주석을 손대지 않는다. 이 저장소의 깨지기 쉬운 컨벤션(한국어 enum 문자열, deprecated `p_admin_key` 시그니처, 커밋 형식)을 취향으로 바꾸지 않는다. 내 변경이 만든 고아 import/변수만 정리하고, 기존 dead code는 발견 시 알리되 지우지 않는다.
+4. **검증 후 완료 선언** — 테스트 러너가 없으므로 "완료/고침"은 dev 서버(`localhost:5273`)에서 실제로 확인했거나 Supabase MCP로 쿼리해 본 뒤에만 말한다. 변경 전 성공 기준을 한 줄로 정하고 그걸 충족할 때까지 반복한다.
+
 ## Commands
 
 ```bash
 npm install      # 의존성 설치
-npm run dev      # Vite dev server — http://localhost:5173 (자동 오픈)
+npm run dev      # Vite dev server — http://localhost:5273 (자동 오픈, strictPort 고정 — OAuth redirect 주소 안정용)
 npm run build    # dist/ 로 프로덕션 빌드
 npm run preview  # 빌드 결과 로컬 미리보기
 ```
@@ -19,19 +28,19 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 1. **Static SPA (Vite + Vanilla JS, no framework)** — `src/main.js`가 해시 라우터(`src/lib/router.js`)에 네 라우트를 등록한다: `/`, `/vote/:id`, `/result/:id`, `/admin`. 각 페이지는 `src/pages/`의 `renderXxx(app, params)` 함수로 구현된다.
 
-2. **Supabase (Postgres + RPC + Realtime)** — `src/lib/supabase.js`가 단일 진입점. 읽기는 `supabase.from(...)`, 쓰기는 RPC 호출(`submit_vote`, `create_poll`, `update_poll`, `create_restaurant`, `update_restaurant`, `delete_restaurant`, `set_restaurant_active`), 변경 구독은 `subscribeVotes`. 스키마와 함수 정의의 단일 진실 원천은 `supabase/schema.sql`이다.
+2. **Supabase (Postgres + RPC + Realtime)** — `src/lib/supabase.js`가 단일 진입점. 읽기는 `supabase.from(...)`, 쓰기는 RPC 호출(poll·restaurant·cafe·option의 create/update/delete·setActive + `submit_vote`/`toggle_like`), 이미지는 `uploadImage`(Storage 직접), 변경 구독은 `subscribeVotes`/`subscribeLikes`. 스키마와 함수 정의의 단일 진실 원천은 `supabase/schema.sql`이다.
 
 데이터 흐름:
 
 ```
-[홈]    home.js    → loadRestaurants + loadPolls           → restaurant-card / poll-list
+[홈]    home.js    → loadRestaurants + loadCafes + loadPolls → restaurant-card / poll-list
 [투표]  vote.js    → loadPoll + loadRestaurants
                   → submitVote (RPC: public.submit_vote)
 [결과]  result.js  → loadPoll + loadRestaurants + loadVotes
                   → tally() → 가중치 랭킹
-[관리자] admin.js  → loadPolls + loadRestaurants + loadVotes
+[관리자] admin.js  → loadPolls + loadRestaurants + loadCafes + loadVotes
                   → createPoll / updatePoll (RPC)
-                  → createRestaurant / updateRestaurant / deleteRestaurant / setRestaurantActive (RPC)
+                  → create/update/delete/setActive (식당·카페·옵션 RPC)
                   → subscribeVotes (Realtime: postgres_changes on votes)
 ```
 
@@ -59,7 +68,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 | `toast.js` | `showToast(msg, opts)` | 토스트 피드백 |
 | `router.js` | `defineRoute` `start` `navigate` `currentPath` `onRouteLeave(fn)` | 해시 라우터 · 페이지 정리(cleanup) 등록 |
 | `modal.js` | `openModal(opts)` | 오버레이 모달 수명주기·접근성 |
-| `supabase.js` | `loadRestaurants/Cafes/Polls/Poll/Votes/Likes/Options` · `submitVote` `toggleLike` · `create/update/delete*` RPC(poll·restaurant·cafe·option) · `setRestaurant/CafeActive` · `uploadImage` · `subscribeVotes/Likes`/`unsubscribe` | 데이터 레이어 단일 진입점. `supabase` 클라이언트는 내부 전용(export 안 함) |
+| `supabase.js` | `signInWithGoogle` `signOut` `getCurrentUser` `amIAdmin` `onAuthChange` · `loadRestaurants/Cafes/Polls/Poll/Votes/Likes/Options` · `submitVote` `toggleLike` · `create/update/delete*` RPC(poll·restaurant·cafe·option) · `setRestaurant/CafeActive` · `uploadImage` · `subscribeVotes/Likes`/`unsubscribe` | 데이터 레이어 단일 진입점(인증 포함). `supabase` 클라이언트는 내부 전용(export 안 함) |
 
 ### src/components (HTML 헬퍼/위젯)
 
@@ -100,7 +109,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 - **Realtime 구독·타이머 cleanup은 라우터가 일괄 회수**: `subscribeVotes`/`subscribeLikes` 채널과 `setInterval` 등은 페이지에서 `onRouteLeave(fn)`(`src/lib/router.js`)로 등록하면 다음 라우트로 dispatch될 때 자동 정리된다(같은 경로 재진입처럼 hashchange가 안 뜨는 경우까지 커버). 채널은 `unsubscribe(channel)`로 정리. admin.js는 모듈 스코프 레지스트리(`registerCleanup`/`runAllCleanups`)를 쓰되 진입 시 `onRouteLeave(runAllCleanups)`로 연결한다. **새 페이지에서 타이머/구독을 만들면 반드시 `onRouteLeave`로 정리 등록할 것.**
 
-- **`VITE_` 환경변수는 클라이언트 번들에 노출된다**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`(=publishable/anon key)는 공개돼도 되는 값이다. **`service_role` 키는 절대 클라이언트에 두지 말 것** — RLS 우회 가능하다. (구 `VITE_ADMIN_KEY`는 OAuth 전환으로 제거 — 더 이상 쓰지 않는다.) 관리자 권한은 클라이언트 키가 아니라 서버에서 로그인 JWT의 이메일을 `private.admin_allowlist`와 대조해 판정하므로, 번들에 비밀이 들어가지 않는다.
+- **`VITE_` 환경변수는 클라이언트 번들에 노출된다**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`(=publishable/anon key)는 공개돼도 되는 값이다. **`service_role` 키는 절대 클라이언트에 두지 말 것** — RLS 우회 가능하다. 구 `VITE_ADMIN_KEY`는 OAuth 전환으로 제거됐다 — 관리자 판정은 위 "관리자 인증" 항목 참조(번들이 아니라 서버에서 JWT 이메일로 판정해 비밀이 들어가지 않는다).
 
 - **디자인 토큰 파이프라인**: `DESIGN.md`(Starbucks 영감 명세) → `src/styles/tokens.css`(CSS 변수) → `src/styles/global.css`(토큰만 참조). 새 색/간격이 필요하면 먼저 `tokens.css`에 토큰을 추가하고 그 변수를 사용해야 한다. 루트가 `62.5%`라는 전제 위에서 `1rem = 10px`로 스페이싱 스케일이 설계돼 있다.
 
@@ -113,7 +122,7 @@ npm run preview  # 빌드 결과 로컬 미리보기
 세 곳을 함께 갱신해야 한다.
 
 1. `supabase/schema.sql` — 테이블·RPC·RLS·publication 정의의 단일 진실 원천. Supabase SQL Editor에서 실행해야 DB에 반영된다.
-2. `src/lib/supabase.js`의 `loadRestaurants` / `loadPolls` / `loadVotes` / `mapPoll` 등 매핑 함수, 그리고 `createPoll` / `updatePoll` / `submitVote`의 인자 변환.
+2. `src/lib/supabase.js`의 매핑 함수(`loadRestaurants/Cafes/Polls/Votes/Likes/Options` · `mapPoll` 등), 그리고 해당 RPC 래퍼(`createPoll`/`updatePoll`/`submitVote`/`createCafe`/`createOption` 등)의 인자 변환.
 3. 사용 측 페이지/컴포넌트.
 
 ## Supabase 운영
@@ -140,10 +149,11 @@ npm run preview  # 빌드 결과 로컬 미리보기
 
 - **본문 (body)**: 변경이 여러 영역에 걸치면 `[그룹명]` 대괄호 헤더로 묶고 그 아래 `-` 불릿. 무엇을·왜를 간결하게. 변경이 단순하면 짧은 불릿 몇 줄로 충분.
 
-- **트레일러**: 모든 커밋 본문 마지막에 빈 줄 후 정확히 아래 한 줄을 붙인다.
+- **트레일러**: 모든 커밋 본문 마지막에 빈 줄 후 아래 한 줄을 붙인다. **모델명은 현재 세션의 Claude 모델명을 쓴다**(특정 버전을 고정하지 않는다 — 하네스가 반영하는 활성 모델). `(1M context)` 접미사·이메일은 고정.
   ```
-  Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+  Co-Authored-By: Claude <현재 세션 모델> (1M context) <noreply@anthropic.com>
   ```
+  예) `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 
 - **작성자/설정**: author 는 기존 git config(`brothersong20 <brothersong20@gmail.com>`) 그대로. `git config`를 수정하지 않는다.
 
@@ -165,5 +175,5 @@ Phase 1.1 (v1.1): 관리자 폴 생성 페이지 · 폴별 식당 후보 선택 
 [홈]
 - 헤더 재정렬, 진행중 폴 섹션 추가
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude <현재 세션 모델> (1M context) <noreply@anthropic.com>
 ```
