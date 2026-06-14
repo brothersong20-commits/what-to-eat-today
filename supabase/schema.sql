@@ -26,8 +26,9 @@ create table if not exists private.admin_allowlist (
 );
 
 -- 관리자 시드(멱등). 추가/삭제는 이 테이블에 직접 insert/delete 하면 된다.
-insert into private.admin_allowlist (email) values ('brothersong20@gmail.com')
-on conflict (email) do nothing;
+-- 아래 줄의 이메일을 본인 구글 계정으로 바꾸고 주석을 해제한 뒤 Supabase SQL Editor에서 실행하세요.
+-- insert into private.admin_allowlist (email) values ('your-email@example.com')
+-- on conflict (email) do nothing;
 
 -- 현재 요청자(로그인 토큰)가 관리자인지 — JWT의 email이 allowlist에 있는지 검사.
 -- security definer라 private 테이블을 읽을 수 있다. auth.jwt()는 요청별 클레임이라

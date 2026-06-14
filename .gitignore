@@ -27,3 +27,27 @@ secrets.json
 # Supabase CLI 로컬 산출물(향후 CLI 도입 대비)
 supabase/.temp/
 supabase/.branches/
+
+# 바이브코딩 안내 덱 — 앱과 무관, 공개 추적 제외
+바이브코딩-기술스택-안내.html
+
+# Windows OS 산출물
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# 편집기/IDE
+.idea/
+*.swp
+*.swo
+*~
+.history/
+
+# 백업/임시 파일
+*.bak
+*.tmp
+*.orig
+
+# Vite 캐시
+.vite/
